@@ -70,9 +70,8 @@ export function UploadStep({ onComplete, onError, summary, error }: UploadStepPr
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-muted-foreground text-sm">
-          Select a Revolut investment statement CSV. The file is parsed locally in
-          your browser; nothing is uploaded. The strict eight-column schema is
-          validated before any row is shown.
+          Select a Revolut investment statement CSV. The file is parsed locally in your browser;
+          nothing is uploaded. The strict eight-column schema is validated before any row is shown.
         </p>
         <div className="flex items-center gap-3">
           <input

@@ -16,16 +16,8 @@ import type {
 } from '@wealthfolio/addon-sdk';
 
 import type { ActivityDraft } from '../domain/activity-draft';
-import type {
-  ActivityMetadataV1,
-  PreparedDraft,
-} from './types';
-import {
-  IMPORTER_ID,
-  IMPORTER_VERSION,
-  SOURCE_SCHEMA_VERSION,
-  SOURCE_TYPE,
-} from './types';
+import type { ActivityMetadataV1, PreparedDraft } from './types';
+import { IMPORTER_ID, IMPORTER_VERSION, SOURCE_SCHEMA_VERSION, SOURCE_TYPE } from './types';
 
 // Re-export the constants so callers don't need a second import.
 export { IMPORTER_ID, IMPORTER_VERSION, SOURCE_SCHEMA_VERSION, SOURCE_TYPE };
@@ -91,10 +83,7 @@ function isCashActivity(draft: ActivityDraft): boolean {
  * the import. Decimal strings are passed through unchanged. `UNKNOWN`
  * activity types are never converted (blocked upstream).
  */
-export function toActivityImport(
-  prepared: PreparedDraft,
-  accountId: string,
-): ActivityImport {
+export function toActivityImport(prepared: PreparedDraft, accountId: string): ActivityImport {
   const { draft, asset } = prepared;
   const isCash = isCashActivity(draft);
   return {
@@ -128,10 +117,7 @@ export function toActivityImport(
  * mapping exists; cash activities omit `asset`. Metadata carries the
  * non-sensitive provenance fingerprint used for duplicate detection.
  */
-export function toActivityCreate(
-  prepared: PreparedDraft,
-  accountId: string,
-): ActivityCreate {
+export function toActivityCreate(prepared: PreparedDraft, accountId: string): ActivityCreate {
   const { draft, fingerprint, sourceRowNumber, asset } = prepared;
   const isCash = isCashActivity(draft);
   const meta = buildMetadata(draft, fingerprint, sourceRowNumber, asset);

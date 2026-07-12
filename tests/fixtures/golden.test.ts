@@ -5,9 +5,7 @@ import { validateBatch } from '../../src/validation/validate-batch';
 import { reconcile } from '../../src/reconciliation/reconcile';
 
 function fixture(name: string) {
-  return readFileSync(new URL(`../fixtures/${name}`, import.meta.url)).toString(
-    'utf8'
-  );
+  return readFileSync(new URL(`../fixtures/${name}`, import.meta.url)).toString('utf8');
 }
 
 describe('golden: revolut-all-supported-types fixture', () => {
@@ -30,11 +28,9 @@ describe('golden: revolut-all-supported-types fixture', () => {
     const subtypeCounts: Record<string, number> = {};
     for (const o of r.outcomes) {
       if (!o.draft) continue;
-      typeCounts[o.draft.activityType] =
-        (typeCounts[o.draft.activityType] ?? 0) + 1;
+      typeCounts[o.draft.activityType] = (typeCounts[o.draft.activityType] ?? 0) + 1;
       if (o.draft.subtype) {
-        subtypeCounts[o.draft.subtype] =
-          (subtypeCounts[o.draft.subtype] ?? 0) + 1;
+        subtypeCounts[o.draft.subtype] = (subtypeCounts[o.draft.subtype] ?? 0) + 1;
       }
     }
     expect(typeCounts).toEqual({
@@ -56,10 +52,7 @@ describe('golden: revolut-all-supported-types fixture', () => {
 
     const accountedSum =
       rep.positions.reduce((s, p) => s + p.buyCount + p.sellCount, 0) +
-      rep.cashByCurrency.reduce(
-        (s, c) => s + c.depositCount + c.withdrawalCount,
-        0
-      ) +
+      rep.cashByCurrency.reduce((s, c) => s + c.depositCount + c.withdrawalCount, 0) +
       rep.creditsByCurrency.reduce((s, c) => s + c.count, 0) +
       rep.dividendsByCurrency.reduce((s, d) => s + d.count, 0);
     expect(accountedSum).toBe(rep.accountedRows);

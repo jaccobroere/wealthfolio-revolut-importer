@@ -39,8 +39,8 @@ export function ImportResult({ summary, onReset }: ImportResultProps) {
         </div>
 
         <p className="text-muted-foreground text-sm">
-          Only activities reported as created by the host were written. Failed
-          or blocked rows were not imported.
+          Only activities reported as created by the host were written. Failed or blocked rows were
+          not imported.
         </p>
 
         <div className="flex justify-end">

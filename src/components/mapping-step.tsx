@@ -17,11 +17,7 @@ import { useEffect, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@wealthfolio/ui';
 import { Button } from '@wealthfolio/ui';
 import { Card, CardContent, CardHeader, CardTitle } from '@wealthfolio/ui';
-import type {
-  HostAPI,
-  ImportMappingData,
-  SymbolSearchResult,
-} from '@wealthfolio/addon-sdk';
+import type { HostAPI, ImportMappingData, SymbolSearchResult } from '@wealthfolio/addon-sdk';
 import type { BatchResult } from '../domain/import-outcome';
 import type { TickerEntry, TickerResolution } from '../state/import-state';
 import { buildTickerEntries } from '../state/import-state';
@@ -66,7 +62,6 @@ export function MappingStep({
     if (batch.outcomes.length === 0) return;
     const entries = buildTickerEntries(batch);
     onTickersInitialized(entries);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batch]);
 
   // When an account is selected, load saved mappings for re-verification.
@@ -140,7 +135,6 @@ export function MappingStep({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, api.market, onTickerResolutionSet, onTickerResolved, savedMappings, tickers]);
 
   async function handleResolve(ticker: string, identity: CanonicalIdentity): Promise<void> {
@@ -171,16 +165,14 @@ export function MappingStep({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-muted-foreground text-sm">
-            Revolut statements identify securities by ticker only (no ISIN or
-            exchange). Each unseen ticker is searched against the market-data
-            registry. The first search result is never auto-accepted; confirm
-            the canonical instrument for each ticker below.
+            Revolut statements identify securities by ticker only (no ISIN or exchange). Each unseen
+            ticker is searched against the market-data registry. The first search result is never
+            auto-accepted; confirm the canonical instrument for each ticker below.
           </p>
 
           {entries.length === 0 && (
             <p className="text-muted-foreground text-sm">
-              No traded securities in this file — only cash movements. Nothing
-              to map.
+              No traded securities in this file — only cash movements. Nothing to map.
             </p>
           )}
 
@@ -282,8 +274,7 @@ function TickerRow({ entry, searching, onResolve }: TickerRowProps) {
 
       {resolution.status === 'no-results' && (
         <div className="text-destructive mt-2 text-sm">
-          No instruments found for “{entry.ticker}”. This ticker must be resolved
-          before import.
+          No instruments found for “{entry.ticker}”. This ticker must be resolved before import.
         </div>
       )}
 
@@ -294,9 +285,7 @@ function TickerRow({ entry, searching, onResolve }: TickerRowProps) {
       {resolution.status === 'pending' && !searching && (
         <div className="text-muted-foreground mt-2 text-sm">Searching…</div>
       )}
-      {searching && (
-        <div className="text-muted-foreground mt-2 text-sm">Searching…</div>
-      )}
+      {searching && <div className="text-muted-foreground mt-2 text-sm">Searching…</div>}
     </div>
   );
 }
@@ -311,9 +300,7 @@ function ResolutionBadge({ status }: { status: TickerEntry['resolution']['status
   };
   const cfg = map[status] ?? map.pending;
   return (
-    <span className={`rounded px-2 py-0.5 text-xs font-medium ${cfg.className}`}>
-      {cfg.label}
-    </span>
+    <span className={`rounded px-2 py-0.5 text-xs font-medium ${cfg.className}`}>{cfg.label}</span>
   );
 }
 

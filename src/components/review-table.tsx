@@ -27,9 +27,7 @@ const KIND_CLASS: Record<RowOutcome['kind'], string> = {
 
 export function ReviewTable({ outcomes }: ReviewTableProps) {
   if (outcomes.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">No rows in this category.</p>
-    );
+    return <p className="text-muted-foreground text-sm">No rows in this category.</p>;
   }
   return (
     <Table>
@@ -50,22 +48,14 @@ export function ReviewTable({ outcomes }: ReviewTableProps) {
           <TableRow key={o.rowIndex}>
             <TableCell className="font-mono text-xs">{o.rowIndex}</TableCell>
             <TableCell className="text-xs">{o.sourceType}</TableCell>
-            <TableCell className="text-xs">
-              {o.draft?.activityType ?? '—'}
-            </TableCell>
+            <TableCell className="text-xs">{o.draft?.activityType ?? '—'}</TableCell>
             <TableCell>
-              <span
-                className={`rounded px-2 py-0.5 text-xs font-medium ${KIND_CLASS[o.kind]}`}
-              >
+              <span className={`rounded px-2 py-0.5 text-xs font-medium ${KIND_CLASS[o.kind]}`}>
                 {KIND_LABEL[o.kind]}
               </span>
             </TableCell>
-            <TableCell className="text-xs">
-              {o.draft?.date.slice(0, 10) ?? '—'}
-            </TableCell>
-            <TableCell className="font-mono text-xs">
-              {o.draft?.quantity ?? '—'}
-            </TableCell>
+            <TableCell className="text-xs">{o.draft?.date.slice(0, 10) ?? '—'}</TableCell>
+            <TableCell className="font-mono text-xs">{o.draft?.quantity ?? '—'}</TableCell>
             <TableCell className="font-mono text-xs">
               {o.draft ? `${o.draft.totalAmount.amount} ${o.draft.currency}` : '—'}
             </TableCell>

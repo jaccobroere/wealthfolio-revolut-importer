@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  KNOWN_SOURCE_TYPES,
-  mapActivityType,
-} from '../../src/mapping/activity-types';
+import { KNOWN_SOURCE_TYPES, mapActivityType } from '../../src/mapping/activity-types';
 
 describe('mapActivityType', () => {
   it('maps every supported source type exactly', () => {

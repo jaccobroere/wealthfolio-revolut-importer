@@ -13,13 +13,9 @@ export const MONEY_REGEX = /^[A-Z]{3}\s+-?\d+(?:\.\d+)?$/;
 const MONEY_PARTS = /^([A-Z]{3})\s+(-?\d+(?:\.\d+)?)$/;
 
 export type ParseMoneyResult =
-  | { ok: true; value: MoneyValue; signed: SignedMoney }
-  | { ok: false; reason: MoneyParseError };
+  { ok: true; value: MoneyValue; signed: SignedMoney } | { ok: false; reason: MoneyParseError };
 
-export type MoneyParseError =
-  | 'money.empty'
-  | 'money.format'
-  | 'money.currency-mismatch';
+export type MoneyParseError = 'money.empty' | 'money.format' | 'money.currency-mismatch';
 
 /**
  * Parse a Revolut prefixed-money string into a canonical {@link MoneyValue}
@@ -28,10 +24,7 @@ export type MoneyParseError =
  *
  * Returns canonical decimal strings produced by `decimal.js`; never a float.
  */
-export function parseMoney(
-  raw: string,
-  expectedCurrency?: Currency
-): ParseMoneyResult {
+export function parseMoney(raw: string, expectedCurrency?: Currency): ParseMoneyResult {
   const input = raw ?? '';
   if (input.length === 0) return { ok: false, reason: 'money.empty' };
 

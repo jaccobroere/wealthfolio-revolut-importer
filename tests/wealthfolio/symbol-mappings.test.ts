@@ -41,7 +41,13 @@ function fakeResult(opts: Partial<SymbolSearchResult>): SymbolSearchResult {
 }
 
 function emptyMapping(accountId = 'acct-1'): ImportMappingData {
-  return { accountId, fieldMappings: {}, activityMappings: {}, symbolMappings: {}, accountMappings: {} };
+  return {
+    accountId,
+    fieldMappings: {},
+    activityMappings: {},
+    symbolMappings: {},
+    accountMappings: {},
+  };
 }
 
 describe('Revolut adapter: symbol mappings', () => {
@@ -57,7 +63,11 @@ describe('Revolut adapter: symbol mappings', () => {
       ...emptyMapping(),
       symbolMappings: {
         'degiro-importer::AAPL': JSON.stringify({ symbol: 'AAPL', exchangeMic: 'XNAS' }),
-        [`${IMPORTER_ID}::AAPL`]: JSON.stringify({ symbol: 'AAPL', exchangeMic: 'XNAS', providerId: 'yahoo' }),
+        [`${IMPORTER_ID}::AAPL`]: JSON.stringify({
+          symbol: 'AAPL',
+          exchangeMic: 'XNAS',
+          providerId: 'yahoo',
+        }),
       },
     };
     const read = readSavedMappings(mapping);
@@ -79,7 +89,9 @@ describe('Revolut adapter: symbol mappings', () => {
   it('blocks when a saved mapping does not match any current search result', () => {
     const identity = { symbol: 'AAPL', exchangeMic: 'XNAS', providerId: 'yahoo' };
     const saved = new Map([['AAPL', identity]]);
-    const results = [fakeResult({ canonicalSymbol: 'MSFT', exchangeMic: 'XNAS', providerId: 'yahoo' })];
+    const results = [
+      fakeResult({ canonicalSymbol: 'MSFT', exchangeMic: 'XNAS', providerId: 'yahoo' }),
+    ];
     const outcome = resolveSymbol('AAPL', saved, results);
     expect(outcome.status).toBe('blocked');
   });
@@ -106,7 +118,9 @@ describe('Revolut adapter: symbol mappings', () => {
 
   it('single unambiguous search result resolves when no saved mapping exists', () => {
     const saved = new Map<string, { symbol: string; exchangeMic?: string; providerId?: string }>();
-    const results = [fakeResult({ canonicalSymbol: 'AAPL', exchangeMic: 'XNAS', providerId: 'yahoo' })];
+    const results = [
+      fakeResult({ canonicalSymbol: 'AAPL', exchangeMic: 'XNAS', providerId: 'yahoo' }),
+    ];
     const outcome = resolveSymbol('AAPL', saved, results);
     expect(outcome.status).toBe('resolved');
     if (outcome.status === 'resolved') {
