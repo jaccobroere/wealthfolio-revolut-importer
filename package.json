@@ -36,6 +36,7 @@
     "validate:manifest": "tsx scripts/validate-manifest.ts",
     "package:addon": "sh scripts/package-addon.sh",
     "validate:package": "tsx scripts/validate-package.ts",
+    "integration:revolut": "playwright test",
     "verify": "pnpm format && pnpm format:check && pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm check:fixtures && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
     "verify:release": "sh scripts/verify-release.sh"
   },
@@ -55,6 +56,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
+    "@playwright/test": "1.58.2",
     "@tailwindcss/vite": "^4.1.13",
     "@tanstack/react-query": "^5.90.20",
     "@testing-library/jest-dom": "^6.9.1",
