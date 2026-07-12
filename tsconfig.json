@@ -21,6 +21,13 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "react", "react-dom"]
   },
-  "include": ["src", "vite.config.ts", "vitest.config.ts"],
-  "exclude": ["dist/**", "node_modules/**", "tests/**", "scripts/**"]
+  "include": [
+    "src",
+    "tests",
+    "scripts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "vitest.acceptance.config.ts"
+  ],
+  "exclude": ["dist/**", "node_modules/**"]
 }
