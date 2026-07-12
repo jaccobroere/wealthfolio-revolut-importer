@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Release artifacts
+artifacts/*.zip
+
+# Coverage
+coverage/
+
+# Local-only work directories (never commit personal data)
+/.local/
+/private-fixtures/
+/local-fixtures/
+
+# Personal / real broker statements — never commit
+/*.personal.csv
+
+# Environment files (only the committed .env.acceptance.example is tracked)
+.env*
+!.env.acceptance.example
+
+# Editor / OS noise
+.DS_Store
+*.log
+
+# Agent local config
+.claude/
