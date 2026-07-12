@@ -22,5 +22,13 @@ export default tseslint.config(
         ecmaFeatures: { jsx: true },
       },
     },
+    rules: {
+      // Allow underscore-prefixed unused args/vars (intentional "I know it's
+      // unused" markers, e.g. mock signatures that must match a host type).
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
   },
 );
