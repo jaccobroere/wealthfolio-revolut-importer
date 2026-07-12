@@ -18,15 +18,10 @@
 import type { ActivityCreate, ActivityImport, HostAPI } from '@wealthfolio/addon-sdk';
 
 import type { ActivityDraft } from '../domain/activity-draft';
-import {
-  buildDuplicateIndex,
-} from './duplicate-index';
+import { buildDuplicateIndex } from './duplicate-index';
 import { toActivityCreate, toActivityImport } from './convert-activity';
 import { getActivities, checkImport, saveCreates } from './api';
-import type {
-  ImportFlowResult,
-  PreparedDraft,
-} from './types';
+import type { ImportFlowResult, PreparedDraft } from './types';
 import { IMPORTER_ID } from './types';
 
 /**
@@ -48,7 +43,9 @@ export async function prepareDrafts(
   drafts: ActivityDraft[],
   fingerprints: string[],
   sourceRowNumbers: number[],
-  resolveAsset?: (draft: ActivityDraft) => Promise<import('@wealthfolio/addon-sdk').AssetResolutionInput | undefined>,
+  resolveAsset?: (
+    draft: ActivityDraft,
+  ) => Promise<import('@wealthfolio/addon-sdk').AssetResolutionInput | undefined>,
 ): Promise<PreparedDraft[]> {
   if (drafts.length !== fingerprints.length || drafts.length !== sourceRowNumbers.length) {
     throw new Error(
@@ -61,9 +58,7 @@ export async function prepareDrafts(
     const fingerprint = fingerprints[i];
     const sourceRowNumber = sourceRowNumbers[i];
     const isCash = !draft.ticker || draft.ticker.length === 0;
-    const asset = isCash
-      ? undefined
-      : (await resolveAsset?.(draft)) ?? { symbol: draft.ticker };
+    const asset = isCash ? undefined : ((await resolveAsset?.(draft)) ?? { symbol: draft.ticker });
     prepared.push({ draft, fingerprint, sourceRowNumber, asset });
   }
   return prepared;
@@ -87,7 +82,9 @@ export async function runImport(
   drafts: ActivityDraft[],
   fingerprints: string[],
   sourceRowNumbers: number[],
-  resolveAsset?: (draft: ActivityDraft) => Promise<import('@wealthfolio/addon-sdk').AssetResolutionInput | undefined>,
+  resolveAsset?: (
+    draft: ActivityDraft,
+  ) => Promise<import('@wealthfolio/addon-sdk').AssetResolutionInput | undefined>,
 ): Promise<ImportFlowResult> {
   const result: ImportFlowResult = {
     attempted: 0,
@@ -170,7 +167,11 @@ export async function runImport(
   // If the host did not round-trip metadata (T09-gate), fall back to positional
   // correlation: assume `created` is in the same order as `creates`. This is
   // defensive only; the metadata round-trip is the verified protocol.
-  if (createdFingerprints.length === 0 && mutation.created.length > 0 && mutation.created.length === acceptedPrepared.length) {
+  if (
+    createdFingerprints.length === 0 &&
+    mutation.created.length > 0 &&
+    mutation.created.length === acceptedPrepared.length
+  ) {
     for (let i = 0; i < acceptedPrepared.length; i++) {
       createdFingerprints.push(acceptedPrepared[i].fingerprint);
     }

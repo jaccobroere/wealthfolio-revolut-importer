@@ -18,14 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from '@wealthfolio/ui';
 import { Button } from '@wealthfolio/ui';
 import { Card, CardContent, CardHeader, CardTitle } from '@wealthfolio/ui';
 import { Checkbox } from '@wealthfolio/ui';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@wealthfolio/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@wealthfolio/ui';
 import type { ImportState } from '../state/import-state';
 import { blockingReasons, canImport } from '../state/import-state';
 
@@ -53,9 +46,9 @@ export function ReconciliationPanel({
       </CardHeader>
       <CardContent className="space-y-5">
         <p className="text-muted-foreground text-sm">
-          Reconciliation verifies that every imported row is accounted for.
-          Net position movement per asset and cash movement per currency must
-          match. Trade-rounding diagnostics are informational only.
+          Reconciliation verifies that every imported row is accounted for. Net position movement
+          per asset and cash movement per currency must match. Trade-rounding diagnostics are
+          informational only.
         </p>
 
         {report ? (
@@ -89,15 +82,12 @@ export function ReconciliationPanel({
                 Total rows: <span className="font-mono">{report.totalRows}</span>
               </div>
               <div>
-                Accounted rows:{' '}
-                <span className="font-mono">{report.accountedRows}</span>
+                Accounted rows: <span className="font-mono">{report.accountedRows}</span>
               </div>
             </div>
           </>
         ) : (
-          <p className="text-muted-foreground text-sm">
-            Reconciliation not yet computed.
-          </p>
+          <p className="text-muted-foreground text-sm">Reconciliation not yet computed.</p>
         )}
 
         <div className="flex items-start gap-3 rounded-md border p-3">
@@ -109,9 +99,8 @@ export function ReconciliationPanel({
             data-testid="acknowledge-checkbox"
           />
           <label htmlFor="revolut-acknowledge" className="text-sm">
-            I have reviewed the reconciliation and confirm the net position and
-            cash movements are correct. I understand import will write these
-            activities to the selected account.
+            I have reviewed the reconciliation and confirm the net position and cash movements are
+            correct. I understand import will write these activities to the selected account.
           </label>
         </div>
 
@@ -173,9 +162,7 @@ function PositionsTable({ state }: { state: ImportState }) {
             <TableCell className="font-mono text-right">{p.bought}</TableCell>
             <TableCell className="font-mono text-right">{p.sold}</TableCell>
             <TableCell className="font-mono text-right">{p.net}</TableCell>
-            <TableCell className="text-right">
-              {p.buyCount + p.sellCount}
-            </TableCell>
+            <TableCell className="text-right">{p.buyCount + p.sellCount}</TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -263,19 +250,14 @@ function DividendsTable({ state }: { state: ImportState }) {
 function RoundingTable({ state }: { state: ImportState }) {
   const variances = state.reconciliation?.tradeRoundingVariances ?? [];
   if (variances.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        No trade-rounding variances detected.
-      </p>
-    );
+    return <p className="text-muted-foreground text-sm">No trade-rounding variances detected.</p>;
   }
   return (
     <div className="space-y-2">
       <p className="text-muted-foreground text-sm">
-        {variances.length} trade{variances.length === 1 ? '' : 's'} where the
-        displayed unit price differs from the authoritative Total Amount by
-        more than 0.01. This reflects Revolut&apos;s rounded displayed price —
-        not an error. Total Amount is authoritative.
+        {variances.length} trade{variances.length === 1 ? '' : 's'} where the displayed unit price
+        differs from the authoritative Total Amount by more than 0.01. This reflects Revolut&apos;s
+        rounded displayed price — not an error. Total Amount is authoritative.
       </p>
       <Table>
         <TableHeader>

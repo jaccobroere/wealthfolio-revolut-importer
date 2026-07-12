@@ -31,11 +31,69 @@ describe('validateRow', () => {
 
   it('maps every supported type to the expected activity type', () => {
     expect(validateRow(row({ type: 'SELL - MARKET' }), 1).draft?.activityType).toBe('SELL');
-    expect(validateRow(row({ type: 'CASH TOP-UP', ticker: '', quantity: '', pricePerShare: '', totalAmount: 'EUR 100.00', currency: 'EUR' }), 1).draft?.activityType).toBe('DEPOSIT');
-    expect(validateRow(row({ type: 'CASH WITHDRAWAL', ticker: '', quantity: '', pricePerShare: '', totalAmount: 'EUR 50.00', currency: 'EUR' }), 1).draft?.activityType).toBe('WITHDRAWAL');
-    expect(validateRow(row({ type: 'DIVIDEND', quantity: '', pricePerShare: '', totalAmount: 'EUR 5.00', currency: 'EUR' }), 1).draft?.activityType).toBe('DIVIDEND');
-    expect(validateRow(row({ type: 'COMMISSION REFUND', quantity: '', pricePerShare: '', totalAmount: 'EUR 1.50', currency: 'EUR' }), 1).draft).toMatchObject({ activityType: 'CREDIT', subtype: 'FEE_REFUND' });
-    expect(validateRow(row({ type: 'REWARD', ticker: '', quantity: '', pricePerShare: '', totalAmount: 'EUR 2.00', currency: 'EUR' }), 1).draft).toMatchObject({ activityType: 'CREDIT', subtype: 'BONUS' });
+    expect(
+      validateRow(
+        row({
+          type: 'CASH TOP-UP',
+          ticker: '',
+          quantity: '',
+          pricePerShare: '',
+          totalAmount: 'EUR 100.00',
+          currency: 'EUR',
+        }),
+        1,
+      ).draft?.activityType,
+    ).toBe('DEPOSIT');
+    expect(
+      validateRow(
+        row({
+          type: 'CASH WITHDRAWAL',
+          ticker: '',
+          quantity: '',
+          pricePerShare: '',
+          totalAmount: 'EUR 50.00',
+          currency: 'EUR',
+        }),
+        1,
+      ).draft?.activityType,
+    ).toBe('WITHDRAWAL');
+    expect(
+      validateRow(
+        row({
+          type: 'DIVIDEND',
+          quantity: '',
+          pricePerShare: '',
+          totalAmount: 'EUR 5.00',
+          currency: 'EUR',
+        }),
+        1,
+      ).draft?.activityType,
+    ).toBe('DIVIDEND');
+    expect(
+      validateRow(
+        row({
+          type: 'COMMISSION REFUND',
+          quantity: '',
+          pricePerShare: '',
+          totalAmount: 'EUR 1.50',
+          currency: 'EUR',
+        }),
+        1,
+      ).draft,
+    ).toMatchObject({ activityType: 'CREDIT', subtype: 'FEE_REFUND' });
+    expect(
+      validateRow(
+        row({
+          type: 'REWARD',
+          ticker: '',
+          quantity: '',
+          pricePerShare: '',
+          totalAmount: 'EUR 2.00',
+          currency: 'EUR',
+        }),
+        1,
+      ).draft,
+    ).toMatchObject({ activityType: 'CREDIT', subtype: 'BONUS' });
   });
 
   it('blocks unknown types as UNKNOWN, never skipping', () => {
@@ -88,10 +146,7 @@ describe('validateRow', () => {
   });
 
   it('preserves the signed raw amount when the source total is negative', () => {
-    const o = validateRow(
-      row({ totalAmount: 'USD -225.00', pricePerShare: 'USD 150.00' }),
-      2
-    );
+    const o = validateRow(row({ totalAmount: 'USD -225.00', pricePerShare: 'USD 150.00' }), 2);
     expect(o.kind).toBe('imported');
     expect(o.draft?.totalAmount.amount).toBe('225');
     expect(o.draft?.rawSignedAmount).toBe('-225');

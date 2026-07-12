@@ -24,32 +24,16 @@
 import type { Account, SymbolSearchResult } from '@wealthfolio/addon-sdk';
 
 import type { ActivityDraft } from '../domain/activity-draft';
-import type {
-  BatchResult,
-  RowOutcome,
-} from '../domain/import-outcome';
+import type { BatchResult, RowOutcome } from '../domain/import-outcome';
 import type { ReconciliationReport } from '../domain/reconciliation';
 import type { CanonicalIdentity } from '../wealthfolio/symbol-mappings';
 
 /** The six wizard states. `importing` and `done` are transient/terminal. */
-export type WizardStep =
-  | 'upload'
-  | 'mapping'
-  | 'review'
-  | 'reconcile'
-  | 'importing'
-  | 'done';
+export type WizardStep = 'upload' | 'mapping' | 'review' | 'reconcile' | 'importing' | 'done';
 
 /** Review filter keys. Every row is reachable through exactly one category. */
 export type ReviewFilter =
-  | 'all'
-  | 'errors'
-  | 'warnings'
-  | 'duplicates'
-  | 'cash'
-  | 'trades'
-  | 'dividends'
-  | 'credits';
+  'all' | 'errors' | 'warnings' | 'duplicates' | 'cash' | 'trades' | 'dividends' | 'credits';
 
 /**
  * Resolution state for a single source ticker. `pending` until the user
@@ -295,9 +279,7 @@ export function hasAccount(state: ImportState): boolean {
  * non-empty ticker that are not yet resolved).
  */
 export function unresolvedTickers(state: ImportState): TickerEntry[] {
-  return Object.values(state.tickers).filter(
-    (t) => t.resolution.status !== 'resolved'
-  );
+  return Object.values(state.tickers).filter((t) => t.resolution.status !== 'resolved');
 }
 
 /** True when every traded-security ticker is resolved. */
@@ -403,7 +385,7 @@ export function categorize(
   outcome: RowOutcome,
   duplicateFingerprints: ReadonlySet<string>,
   fingerprints: readonly string[],
-  roundingVariances: ReadonlyMap<number, string>
+  roundingVariances: ReadonlyMap<number, string>,
 ): ReviewFilter {
   if (outcome.kind === 'unknown' || outcome.kind === 'invalid') return 'errors';
   if (outcome.kind !== 'imported' || !outcome.draft) return 'errors';
@@ -430,17 +412,17 @@ export function categorize(
  * Filter outcomes by the active review filter. Returns the subset of
  * outcomes matching the filter, preserving source order.
  */
-export function filterOutcomes(
-  state: ImportState
-): readonly RowOutcome[] {
+export function filterOutcomes(state: ImportState): readonly RowOutcome[] {
   if (!state.batch) return [];
   const outcomes = state.batch.outcomes;
   if (state.filter === 'all') return outcomes;
   const rounding = new Map<number, string>(
-    (state.reconciliation?.tradeRoundingVariances ?? []).map((v) => [v.rowIndex, v.variance])
+    (state.reconciliation?.tradeRoundingVariances ?? []).map((v) => [v.rowIndex, v.variance]),
   );
-  return outcomes.filter((o) =>
-    categorize(o, state.duplicateFingerprints, state.batch!.fingerprints, rounding) === state.filter
+  return outcomes.filter(
+    (o) =>
+      categorize(o, state.duplicateFingerprints, state.batch!.fingerprints, rounding) ===
+      state.filter,
   );
 }
 
@@ -458,7 +440,7 @@ export function categoryCounts(state: ImportState): Record<ReviewFilter, number>
   };
   if (!state.batch) return counts;
   const rounding = new Map<number, string>(
-    (state.reconciliation?.tradeRoundingVariances ?? []).map((v) => [v.rowIndex, v.variance])
+    (state.reconciliation?.tradeRoundingVariances ?? []).map((v) => [v.rowIndex, v.variance]),
   );
   for (const o of state.batch.outcomes) {
     const cat = categorize(o, state.duplicateFingerprints, state.batch.fingerprints, rounding);
@@ -501,7 +483,11 @@ export function buildTickerEntries(batch: BatchResult): Record<string, TickerEnt
  * Compute the upload summary from a parsed CSV result. Privacy: only row
  * count and date range — never content, balances, or tickers.
  */
-export function uploadSummaryFromBatch(batch: BatchResult, headerOk: boolean, headerError?: string): UploadSummary {
+export function uploadSummaryFromBatch(
+  batch: BatchResult,
+  headerOk: boolean,
+  headerError?: string,
+): UploadSummary {
   const dates: string[] = [];
   for (const o of batch.outcomes) {
     if (o.kind === 'imported' && o.draft) {

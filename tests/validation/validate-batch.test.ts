@@ -4,9 +4,7 @@ import { parseRevolutCsv } from '../../src/parser/parse-csv';
 import { validateBatch } from '../../src/validation/validate-batch';
 
 function fixture(name: string) {
-  return readFileSync(new URL(`../fixtures/${name}`, import.meta.url)).toString(
-    'utf8'
-  );
+  return readFileSync(new URL(`../fixtures/${name}`, import.meta.url)).toString('utf8');
 }
 
 async function batch(name: string) {
