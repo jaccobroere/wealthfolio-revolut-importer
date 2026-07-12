@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - T02 baseline: 3.6.1 toolchain (pnpm 10.34.5, Node 20.19.0, vite 7, strict TS),
   licensing (MIT), privacy rules, package normalization (id `revolut-importer`,
   name `wealthfolio-revolut-importer`), SDK contract docs, and the sandbox shell
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Acceptance output is aggregate-only; the real statement is never committed.
 
 ### Changed
+
 - `tsconfig.json` now type-checks `tests/` and `scripts/` in addition to `src/`.
 
 ## [0.1.0] - unreleased

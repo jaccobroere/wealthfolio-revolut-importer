@@ -4,9 +4,7 @@ import { parseRevolutCsv, validateHeader } from '../../src/parser/parse-csv';
 import { REVOLUT_HEADERS } from '../../src/domain/revolut-row';
 
 function fixture(name: string): string {
-  return readFileSync(
-    new URL(`../fixtures/${name}`, import.meta.url)
-  ).toString('utf8');
+  return readFileSync(new URL(`../fixtures/${name}`, import.meta.url)).toString('utf8');
 }
 
 describe('validateHeader', () => {
@@ -75,7 +73,8 @@ describe('parseRevolutCsv', () => {
       'Ticker',
       'Date',
     ].join(',');
-    const line = 'USD,1.0000,USD 225.00,USD 150.00,1.5,BUY - MARKET,SYNTH,2024-01-01T10:00:00.000000Z';
+    const line =
+      'USD,1.0000,USD 225.00,USD 150.00,1.5,BUY - MARKET,SYNTH,2024-01-01T10:00:00.000000Z';
     const parsed = parseRevolutCsv(`${reorderedHeader}\n${line}\n`);
     expect(parsed.header.ok).toBe(true);
     expect(parsed.header.reordered).toBe(true);

@@ -58,13 +58,15 @@ export function createAddonContext(api: HostAPI): AddonContext {
   } as unknown as AddonContext;
 }
 
-export async function buildState(options: {
-  csv?: string;
-  accountId?: string | null;
-  resolvedTickers?: boolean;
-  acknowledged?: boolean;
-  forceResidualFailure?: boolean;
-} = {}): Promise<ImportState> {
+export async function buildState(
+  options: {
+    csv?: string;
+    accountId?: string | null;
+    resolvedTickers?: boolean;
+    acknowledged?: boolean;
+    forceResidualFailure?: boolean;
+  } = {},
+): Promise<ImportState> {
   const {
     csv = GOOD_CSV,
     accountId = 'acct-1',

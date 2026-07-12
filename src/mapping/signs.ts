@@ -10,7 +10,7 @@ import type { MoneyValue, SignedMoney } from '../domain/money-value';
  */
 export function normalizeSignedAmount(
   currency: string,
-  rawNumeric: string
+  rawNumeric: string,
 ): { value: MoneyValue; signed: SignedMoney } {
   const decimal = new Decimal(rawNumeric);
   const isNegative = decimal.isNegative();
@@ -21,10 +21,7 @@ export function normalizeSignedAmount(
 }
 
 /** Activity types whose direction expresses an outflow of cash. */
-export const OUTFLOW_ACTIVITY_TYPES: ReadonlySet<string> = new Set([
-  'SELL',
-  'WITHDRAWAL',
-]);
+export const OUTFLOW_ACTIVITY_TYPES: ReadonlySet<string> = new Set(['SELL', 'WITHDRAWAL']);
 
 /** Activity types whose direction expresses an inflow of cash or a purchase. */
 export const INFLOW_ACTIVITY_TYPES: ReadonlySet<string> = new Set([

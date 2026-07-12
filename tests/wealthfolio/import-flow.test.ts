@@ -16,11 +16,7 @@ import type { ActivityDraft } from '../../src/domain/activity-draft';
 import { IMPORTER_ID } from '../../src/wealthfolio/types';
 import { runImport } from '../../src/wealthfolio/import';
 import { buildDuplicateIndex } from '../../src/wealthfolio/duplicate-index';
-import {
-  createFakeHost,
-  foreignSeededActivity,
-  seededActivity,
-} from './fake-host';
+import { createFakeHost, foreignSeededActivity, seededActivity } from './fake-host';
 
 /** A minimal valid BUY draft. */
 function buyDraft(opts: Partial<ActivityDraft> = {}): ActivityDraft {
@@ -270,8 +266,8 @@ describe('Revolut adapter: idempotent import flow', () => {
 
   it('prepareDrafts rejects mismatched input lengths', async () => {
     const { prepareDrafts } = await import('../../src/wealthfolio/import');
-    await expect(
-      prepareDrafts([buyDraft()], ['fp-1', 'fp-2'], [2]),
-    ).rejects.toThrow(/length mismatch/);
+    await expect(prepareDrafts([buyDraft()], ['fp-1', 'fp-2'], [2])).rejects.toThrow(
+      /length mismatch/,
+    );
   });
 });

@@ -59,12 +59,9 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
 
   // --- Step transitions -----------------------------------------------------
 
-  const handleUploadComplete = useCallback(
-    (batch: BatchResult, summary: UploadSummary) => {
-      dispatch({ type: 'UPLOAD_COMPLETE', batch, summary });
-    },
-    []
-  );
+  const handleUploadComplete = useCallback((batch: BatchResult, summary: UploadSummary) => {
+    dispatch({ type: 'UPLOAD_COMPLETE', batch, summary });
+  }, []);
 
   const handleUploadError = useCallback((message: string) => {
     dispatch({ type: 'UPLOAD_FAILED', error: message });
@@ -74,26 +71,17 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
     dispatch({ type: 'SELECT_ACCOUNT', accountId });
   }, []);
 
-  const handleTickersInitialized = useCallback(
-    (tickers: Readonly<Record<string, TickerEntry>>) => {
-      dispatch({ type: 'TICKERS_INITIALIZED', tickers });
-    },
-    []
-  );
+  const handleTickersInitialized = useCallback((tickers: Readonly<Record<string, TickerEntry>>) => {
+    dispatch({ type: 'TICKERS_INITIALIZED', tickers });
+  }, []);
 
-  const handleTickerResolved = useCallback(
-    (ticker: string, identity: CanonicalIdentity) => {
-      dispatch({ type: 'TICKER_RESOLVED', ticker, identity });
-    },
-    []
-  );
+  const handleTickerResolved = useCallback((ticker: string, identity: CanonicalIdentity) => {
+    dispatch({ type: 'TICKER_RESOLVED', ticker, identity });
+  }, []);
 
-  const handleTickerResolutionSet = useCallback(
-    (ticker: string, resolution: TickerResolution) => {
-      dispatch({ type: 'TICKER_RESOLUTION_SET', ticker, resolution });
-    },
-    []
-  );
+  const handleTickerResolutionSet = useCallback((ticker: string, resolution: TickerResolution) => {
+    dispatch({ type: 'TICKER_RESOLUTION_SET', ticker, resolution });
+  }, []);
 
   const handleFilterChange = useCallback((filter: ReviewFilter) => {
     dispatch({ type: 'SET_FILTER', filter });
@@ -208,8 +196,8 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
       <div>
         <h1 className="text-2xl font-semibold">Revolut Importer</h1>
         <p className="text-muted-foreground text-sm">
-          Import Revolut investment CSV statements with explicit symbol review,
-          duplicate-safe imports, and full row-level reconciliation.
+          Import Revolut investment CSV statements with explicit symbol review, duplicate-safe
+          imports, and full row-level reconciliation.
         </p>
       </div>
 

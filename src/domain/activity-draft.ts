@@ -6,13 +6,7 @@ import type { Currency, MoneyValue } from './money-value';
  * can emit; `UNKNOWN` is reserved for blocked, unmapped source types.
  */
 export type ActivityType =
-  | 'BUY'
-  | 'SELL'
-  | 'DIVIDEND'
-  | 'DEPOSIT'
-  | 'WITHDRAWAL'
-  | 'CREDIT'
-  | 'UNKNOWN';
+  'BUY' | 'SELL' | 'DIVIDEND' | 'DEPOSIT' | 'WITHDRAWAL' | 'CREDIT' | 'UNKNOWN';
 
 /** Wealthfolio activity subtypes Revolut mapping can emit. */
 export type ActivitySubtype = 'FEE_REFUND' | 'BONUS';

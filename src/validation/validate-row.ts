@@ -86,7 +86,7 @@ export function validateRow(row: RevolutSourceRow, rowIndex: number): RowOutcome
 
     const priceResult = parseMoney(
       row.pricePerShare,
-      isCurrencyCode(currency) ? currency : undefined
+      isCurrencyCode(currency) ? currency : undefined,
     );
     if (!priceResult.ok) {
       reasons.push(`price.${priceResult.reason}`);
@@ -100,11 +100,7 @@ export function validateRow(row: RevolutSourceRow, rowIndex: number): RowOutcome
     }
   }
 
-  if (
-    reasons.length > 0 ||
-    dateResult.ok !== true ||
-    totalValue === null
-  ) {
+  if (reasons.length > 0 || dateResult.ok !== true || totalValue === null) {
     return { rowIndex, kind: 'invalid', sourceType: row.type, reasons };
   }
 

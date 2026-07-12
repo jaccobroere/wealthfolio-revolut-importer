@@ -36,8 +36,7 @@ export function validateHeader(cells: readonly string[]): HeaderValidation {
     .filter((h) => !expectedSet.has(h))
     .filter((h, i, arr) => arr.indexOf(h) === i);
 
-  const ok =
-    missing.length === 0 && unknown.length === 0 && duplicates.length === 0;
+  const ok = missing.length === 0 && unknown.length === 0 && duplicates.length === 0;
   const reordered =
     ok &&
     cells.length === HEADER_COUNT &&
@@ -48,10 +47,9 @@ export function validateHeader(cells: readonly string[]): HeaderValidation {
     const parts: string[] = [];
     if (missing.length > 0) parts.push(`missing columns: ${missing.join(', ')}`);
     if (unknown.length > 0) parts.push(`unknown columns: ${unknown.join(', ')}`);
-    if (duplicates.length > 0)
-      parts.push(`duplicate columns: ${duplicates.join(', ')}`);
+    if (duplicates.length > 0) parts.push(`duplicate columns: ${duplicates.join(', ')}`);
     error = `Revolut schema mismatch — ${parts.join('; ')}. Expected exactly: ${REVOLUT_HEADERS.join(
-      ', '
+      ', ',
     )}`;
   }
 
@@ -60,11 +58,11 @@ export function validateHeader(cells: readonly string[]): HeaderValidation {
 
 function mapRow(
   values: readonly string[],
-  index: Readonly<Record<RevolutHeader, number>>
+  index: Readonly<Record<RevolutHeader, number>>,
 ): RevolutSourceRow {
   const get = (h: RevolutHeader): string => {
     const i = index[h];
-    return i === undefined || i < 0 ? '' : values[i] ?? '';
+    return i === undefined || i < 0 ? '' : (values[i] ?? '');
   };
   return {
     date: get('Date'),
@@ -100,8 +98,7 @@ export function parseRevolutCsv(text: string): ParsedCsv {
         unknown: [],
         duplicates: [],
         reordered: false,
-        error:
-          'Revolut CSV is empty — expected header row and at least one data row.',
+        error: 'Revolut CSV is empty — expected header row and at least one data row.',
       },
       rows: [],
     };

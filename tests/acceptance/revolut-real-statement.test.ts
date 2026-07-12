@@ -25,21 +25,17 @@ const CSV_ENV = 'REVOLUT_ACCEPTANCE_CSV';
 function resolveRealCsv(): string {
   const path = process.env[CSV_ENV];
   if (!path || path.trim().length === 0) {
-    throw new Error(
-      `${CSV_ENV} is not set: cannot run the real-statement acceptance suite.`
-    );
+    throw new Error(`${CSV_ENV} is not set: cannot run the real-statement acceptance suite.`);
   }
   let stat;
   try {
     stat = statSync(path);
   } catch {
-    throw new Error(
-      `${CSV_ENV} is unreadable or missing: acceptance suite cannot proceed.`
-    );
+    throw new Error(`${CSV_ENV} is unreadable or missing: acceptance suite cannot proceed.`);
   }
   if (!stat.isFile()) {
     throw new Error(
-      `${CSV_ENV} does not point to a regular file: acceptance suite cannot proceed.`
+      `${CSV_ENV} does not point to a regular file: acceptance suite cannot proceed.`,
     );
   }
   return path;
@@ -57,9 +53,7 @@ const text = readFileSync(path, 'utf8');
 const parsed = parseRevolutCsv(text);
 
 if (!parsed.header.ok) {
-  throw new Error(
-    `Revolut schema changed: ${parsed.header.error ?? 'unknown failure'}`
-  );
+  throw new Error(`Revolut schema changed: ${parsed.header.error ?? 'unknown failure'}`);
 }
 
 const batch = await validateBatch(parsed.rows);
@@ -72,18 +66,12 @@ describe('Revolut real statement (local acceptance gate)', () => {
   });
 
   it('matches the reviewed source-type counts', () => {
-    expect(countBy(parsed.rows.map((r) => r.type))).toEqual(
-      EXPECTED_SOURCE_TYPE_COUNTS
-    );
+    expect(countBy(parsed.rows.map((r) => r.type))).toEqual(EXPECTED_SOURCE_TYPE_COUNTS);
   });
 
   it('matches the reviewed normalized activity-type counts', () => {
     expect(
-      countBy(
-        batch.outcomes.map((o) =>
-          o.draft ? o.draft.activityType : 'UNKNOWN'
-        )
-      )
+      countBy(batch.outcomes.map((o) => (o.draft ? o.draft.activityType : 'UNKNOWN'))),
     ).toEqual(EXPECTED_NORMALIZED_TYPE_COUNTS);
   });
 
@@ -96,8 +84,8 @@ describe('Revolut real statement (local acceptance gate)', () => {
             const sub = o.draft.subtype;
             return sub === undefined ? null : (sub as string);
           })
-          .filter((s): s is string => s !== null)
-      )
+          .filter((s): s is string => s !== null),
+      ),
     ).toEqual(EXPECTED_NORMALIZED_SUBTYPE_COUNTS);
   });
 
@@ -122,9 +110,7 @@ describe('Revolut real statement (local acceptance gate)', () => {
   });
 
   it('reports exactly the reviewed number of trade-rounding diagnostics', () => {
-    expect(report.tradeRoundingVariances.length).toBe(
-      EXPECTED_ROUNDING_DIAGNOSTICS
-    );
+    expect(report.tradeRoundingVariances.length).toBe(EXPECTED_ROUNDING_DIAGNOSTICS);
   });
 
   it('has the exact reviewed maximum trade-rounding variance', () => {
@@ -154,10 +140,7 @@ describe('Revolut real statement (local acceptance gate)', () => {
 
     const accountedSum =
       report.positions.reduce((s, p) => s + p.buyCount + p.sellCount, 0) +
-      report.cashByCurrency.reduce(
-        (s, c) => s + c.depositCount + c.withdrawalCount,
-        0
-      ) +
+      report.cashByCurrency.reduce((s, c) => s + c.depositCount + c.withdrawalCount, 0) +
       report.creditsByCurrency.reduce((s, c) => s + c.count, 0) +
       report.dividendsByCurrency.reduce((s, d) => s + d.count, 0);
     expect(accountedSum).toBe(report.accountedRows);

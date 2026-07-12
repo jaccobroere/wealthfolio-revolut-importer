@@ -83,17 +83,17 @@ const report = reconcile(batch.outcomes);
 
 const sourceTypeCounts = countBy(parsed.rows.map((r) => r.type));
 const normalizedTypeCounts = countBy(
-  batch.outcomes.map((o) => (o.draft ? o.draft.activityType : 'UNKNOWN'))
+  batch.outcomes.map((o) => (o.draft ? o.draft.activityType : 'UNKNOWN')),
 );
-  const normalizedSubtypeCounts = countBy(
-    batch.outcomes
-      .map((o) => {
-        if (!o.draft) return null;
-        const sub = o.draft.subtype;
-        return sub === undefined ? null : (sub as string);
-      })
-      .filter((s): s is string => s !== null)
-  );
+const normalizedSubtypeCounts = countBy(
+  batch.outcomes
+    .map((o) => {
+      if (!o.draft) return null;
+      const sub = o.draft.subtype;
+      return sub === undefined ? null : (sub as string);
+    })
+    .filter((s): s is string => s !== null),
+);
 
 console.log('schema.ok=true');
 console.log(`schema.reordered=${parsed.header.reordered}`);
@@ -105,39 +105,22 @@ console.log(`outcomes.collisions=${batch.collisions.length}`);
 console.log(`fingerprints.unique=${new Set(batch.fingerprints).size}`);
 console.log(`fingerprints.total=${batch.fingerprints.length}`);
 console.log(`source-types=${JSON.stringify(sortCounts(sourceTypeCounts))}`);
-console.log(
-  `normalized-types=${JSON.stringify(sortCounts(normalizedTypeCounts))}`
-);
-console.log(
-  `normalized-subtypes=${JSON.stringify(sortCounts(normalizedSubtypeCounts))}`
-);
+console.log(`normalized-types=${JSON.stringify(sortCounts(normalizedTypeCounts))}`);
+console.log(`normalized-subtypes=${JSON.stringify(sortCounts(normalizedSubtypeCounts))}`);
 console.log(`reconciliation.accountedRows=${report.accountedRows}`);
 console.log(`reconciliation.tickers=${report.positions.length}`);
 console.log(`reconciliation.cashCurrencies=${report.cashByCurrency.length}`);
-console.log(
-  `reconciliation.creditCurrencies=${report.creditsByCurrency.length}`
-);
-console.log(
-  `reconciliation.dividendCurrencies=${report.dividendsByCurrency.length}`
-);
-console.log(
-  `reconciliation.tradeRoundingDiagnostics=${report.tradeRoundingVariances.length}`
-);
+console.log(`reconciliation.creditCurrencies=${report.creditsByCurrency.length}`);
+console.log(`reconciliation.dividendCurrencies=${report.dividendsByCurrency.length}`);
+console.log(`reconciliation.tradeRoundingDiagnostics=${report.tradeRoundingVariances.length}`);
 
 const accountedSum =
   report.positions.reduce((s, p) => s + p.buyCount + p.sellCount, 0) +
-  report.cashByCurrency.reduce(
-    (s, c) => s + c.depositCount + c.withdrawalCount,
-    0
-  ) +
+  report.cashByCurrency.reduce((s, c) => s + c.depositCount + c.withdrawalCount, 0) +
   report.creditsByCurrency.reduce((s, c) => s + c.count, 0) +
   report.dividendsByCurrency.reduce((s, d) => s + d.count, 0);
-console.log(
-  `invariant.accountedRowsMatch=${accountedSum === report.accountedRows}`
-);
-console.log(
-  `invariant.allRowsAccounted=${report.totalRows === report.accountedRows}`
-);
+console.log(`invariant.accountedRowsMatch=${accountedSum === report.accountedRows}`);
+console.log(`invariant.allRowsAccounted=${report.totalRows === report.accountedRows}`);
 
 // `summaryOnly` is accepted as a privacy confirmation; output is always
 // summary-only regardless. Reference the flag so it is not flagged as unused.

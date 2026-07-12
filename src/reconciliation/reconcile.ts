@@ -110,9 +110,7 @@ export function reconcile(outcomes: readonly RowOutcome[]): ReconciliationReport
           depositCount: 0,
           withdrawalCount: 0,
         };
-        acc.withdrawals = acc.withdrawals.plus(
-          new Decimal(draft.totalAmount.amount)
-        );
+        acc.withdrawals = acc.withdrawals.plus(new Decimal(draft.totalAmount.amount));
         acc.withdrawalCount++;
         cash.set(draft.currency, acc);
         break;
@@ -181,12 +179,10 @@ export function reconcile(outcomes: readonly RowOutcome[]): ReconciliationReport
       bySubtype: Object.fromEntries(
         [...acc.bySubtype.entries()]
           .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-          .map(([k, v]) => [k, { count: v.count, total: v.total.toString() }])
+          .map(([k, v]) => [k, { count: v.count, total: v.total.toString() }]),
       ),
     }))
-    .sort((a, b) =>
-      a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0
-    );
+    .sort((a, b) => (a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0));
 
   const dividendList: DividendEntry[] = [...dividends.entries()]
     .map(([currency, acc]) => ({
@@ -194,9 +190,7 @@ export function reconcile(outcomes: readonly RowOutcome[]): ReconciliationReport
       count: acc.count,
       total: acc.total.toString(),
     }))
-    .sort((a, b) =>
-      a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0
-    );
+    .sort((a, b) => (a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0));
 
   variances.sort((a, b) => a.rowIndex - b.rowIndex);
 

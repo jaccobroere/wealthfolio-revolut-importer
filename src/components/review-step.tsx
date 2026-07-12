@@ -42,10 +42,9 @@ export function ReviewStep({ state, onFilterChange, onContinue, onBack }: Review
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-muted-foreground text-sm">
-          Every row is categorized. Errors (unknown or invalid rows) block
-          import. Duplicates are rows whose fingerprint matches an earlier row
-          in this file. Warnings are trade-rounding diagnostics (Revolut rounds
-          displayed unit prices) — they do not block.
+          Every row is categorized. Errors (unknown or invalid rows) block import. Duplicates are
+          rows whose fingerprint matches an earlier row in this file. Warnings are trade-rounding
+          diagnostics (Revolut rounds displayed unit prices) — they do not block.
         </p>
 
         <div className="flex flex-wrap gap-2">
@@ -72,9 +71,8 @@ export function ReviewStep({ state, onFilterChange, onContinue, onBack }: Review
 
         {hasFatal && (
           <p className="text-destructive text-sm" role="alert">
-            {counts.errors} row{counts.errors === 1 ? '' : 's'} with errors must
-            be resolved before import. Unknown or invalid rows cannot be
-            imported.
+            {counts.errors} row{counts.errors === 1 ? '' : 's'} with errors must be resolved before
+            import. Unknown or invalid rows cannot be imported.
           </p>
         )}
 

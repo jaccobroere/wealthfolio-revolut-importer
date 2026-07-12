@@ -1,9 +1,5 @@
 import type { ActivityDraft } from '../domain/activity-draft';
-import type {
-  BatchResult,
-  OutcomeCounts,
-  RowOutcome,
-} from '../domain/import-outcome';
+import type { BatchResult, OutcomeCounts, RowOutcome } from '../domain/import-outcome';
 import type { RevolutSourceRow } from '../domain/revolut-row';
 import { fingerprint } from '../duplicates/fingerprint';
 import { validateRow } from './validate-row';
@@ -19,9 +15,7 @@ import { validateRow } from './validate-row';
  * - `collisions` lists 1-based row indices whose fingerprint matches an
  *   earlier row's fingerprint (input duplicates / overlapping imports).
  */
-export async function validateBatch(
-  rows: readonly RevolutSourceRow[]
-): Promise<BatchResult> {
+export async function validateBatch(rows: readonly RevolutSourceRow[]): Promise<BatchResult> {
   const outcomes: RowOutcome[] = rows.map((row, i) => validateRow(row, i + 1));
 
   const fingerprints = await Promise.all(rows.map((row) => fingerprint(row)));
@@ -48,9 +42,7 @@ export async function validateBatch(
   return { outcomes, imported, counts, fingerprints, collisions };
 }
 
-export function countOutcomes(
-  outcomes: readonly RowOutcome[]
-): OutcomeCounts {
+export function countOutcomes(outcomes: readonly RowOutcome[]): OutcomeCounts {
   let imported = 0;
   let unknown = 0;
   let invalid = 0;

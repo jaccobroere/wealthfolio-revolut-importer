@@ -50,9 +50,30 @@ describe('reconcile', () => {
 
   it('aggregates deposits/withdrawals per currency', () => {
     const o = outcomes([
-      row({ type: 'CASH TOP-UP', ticker: '', quantity: '', pricePerShare: '', totalAmount: 'EUR 100.00', currency: 'EUR' }),
-      row({ type: 'CASH TOP-UP', ticker: '', quantity: '', pricePerShare: '', totalAmount: 'EUR 50.00', currency: 'EUR' }),
-      row({ type: 'CASH WITHDRAWAL', ticker: '', quantity: '', pricePerShare: '', totalAmount: 'EUR 30.00', currency: 'EUR' }),
+      row({
+        type: 'CASH TOP-UP',
+        ticker: '',
+        quantity: '',
+        pricePerShare: '',
+        totalAmount: 'EUR 100.00',
+        currency: 'EUR',
+      }),
+      row({
+        type: 'CASH TOP-UP',
+        ticker: '',
+        quantity: '',
+        pricePerShare: '',
+        totalAmount: 'EUR 50.00',
+        currency: 'EUR',
+      }),
+      row({
+        type: 'CASH WITHDRAWAL',
+        ticker: '',
+        quantity: '',
+        pricePerShare: '',
+        totalAmount: 'EUR 30.00',
+        currency: 'EUR',
+      }),
     ]);
     const rep = reconcile(o);
     expect(rep.cashByCurrency).toEqual([
@@ -69,14 +90,31 @@ describe('reconcile', () => {
 
   it('splits credits and dividends per currency', () => {
     const o = outcomes([
-      row({ type: 'DIVIDEND', quantity: '', pricePerShare: '', totalAmount: 'EUR 5.00', currency: 'EUR' }),
-      row({ type: 'COMMISSION REFUND', quantity: '', pricePerShare: '', totalAmount: 'EUR 1.50', currency: 'EUR' }),
-      row({ type: 'REWARD', ticker: '', quantity: '', pricePerShare: '', totalAmount: 'EUR 2.00', currency: 'EUR' }),
+      row({
+        type: 'DIVIDEND',
+        quantity: '',
+        pricePerShare: '',
+        totalAmount: 'EUR 5.00',
+        currency: 'EUR',
+      }),
+      row({
+        type: 'COMMISSION REFUND',
+        quantity: '',
+        pricePerShare: '',
+        totalAmount: 'EUR 1.50',
+        currency: 'EUR',
+      }),
+      row({
+        type: 'REWARD',
+        ticker: '',
+        quantity: '',
+        pricePerShare: '',
+        totalAmount: 'EUR 2.00',
+        currency: 'EUR',
+      }),
     ]);
     const rep = reconcile(o);
-    expect(rep.dividendsByCurrency).toEqual([
-      { currency: 'EUR', count: 1, total: '5' },
-    ]);
+    expect(rep.dividendsByCurrency).toEqual([{ currency: 'EUR', count: 1, total: '5' }]);
     expect(rep.creditsByCurrency).toEqual([
       {
         currency: 'EUR',
@@ -92,9 +130,7 @@ describe('reconcile', () => {
 
   it('flags trade-rounding variances strictly above 0.01', () => {
     // quantity x price = 1.5 * 150.00 = 225.00, total = 225.10 -> variance 0.10
-    const o = outcomes([
-      row({ totalAmount: 'USD 225.10' }),
-    ]);
+    const o = outcomes([row({ totalAmount: 'USD 225.10' })]);
     const rep = reconcile(o);
     expect(rep.tradeRoundingVariances.length).toBe(1);
     expect(rep.tradeRoundingVariances[0].variance).toBe('0.1');
@@ -102,9 +138,7 @@ describe('reconcile', () => {
 
   it('does not flag a tiny within-threshold variance', () => {
     // 1.5 * 150.00 = 225.00, total = 225.005 -> variance 0.005 (<= 0.01)
-    const o = outcomes([
-      row({ totalAmount: 'USD 225.005' }),
-    ]);
+    const o = outcomes([row({ totalAmount: 'USD 225.005' })]);
     const rep = reconcile(o);
     expect(rep.tradeRoundingVariances.length).toBe(0);
   });
@@ -112,7 +146,13 @@ describe('reconcile', () => {
   it('reports deterministic output across repeated runs', () => {
     const o = outcomes([
       row({ ticker: 'B' }),
-      row({ ticker: 'A', type: 'SELL - MARKET', quantity: '1', pricePerShare: 'USD 10.00', totalAmount: 'USD 10.00' }),
+      row({
+        ticker: 'A',
+        type: 'SELL - MARKET',
+        quantity: '1',
+        pricePerShare: 'USD 10.00',
+        totalAmount: 'USD 10.00',
+      }),
     ]);
     const a = reconcile(o);
     const b = reconcile(o);

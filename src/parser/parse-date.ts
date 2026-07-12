@@ -1,6 +1,4 @@
-export type ParseDateResult =
-  | { ok: true; iso: string }
-  | { ok: false; reason: DateParseError };
+export type ParseDateResult = { ok: true; iso: string } | { ok: false; reason: DateParseError };
 
 export type DateParseError = 'date.empty' | 'date.format' | 'date.invalid';
 
