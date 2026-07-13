@@ -2,10 +2,11 @@
 set -eu
 
 PNPM=${PNPM:-pnpm}
-if [ -z "${REVOLUT_ACCEPTANCE_CSV:-}" ] || [ ! -f "$REVOLUT_ACCEPTANCE_CSV" ]; then
-  echo 'REVOLUT_ACCEPTANCE_CSV must reference a readable real statement before release verification.' >&2
+if [ -z "${REVOLUT_ACCEPTANCE_CSV:-}" ] || [ ! -f "$REVOLUT_ACCEPTANCE_CSV" ] || [ -z "${REVOLUT_ACCEPTANCE_BASELINE:-}" ] || [ ! -f "$REVOLUT_ACCEPTANCE_BASELINE" ]; then
+  echo 'REVOLUT_ACCEPTANCE_CSV and REVOLUT_ACCEPTANCE_BASELINE must reference readable local files.' >&2
   exit 1
 fi
+git diff --quiet && git diff --cached --quiet || { echo 'Release verification requires a clean Git tree.' >&2; exit 1; }
 
 $PNPM verify
 if ! $PNPM acceptance:local -- --reporter=dot --silent >/dev/null 2>&1; then
@@ -16,5 +17,6 @@ $PNPM clean
 $PNPM build
 $PNPM package:addon
 $PNPM validate:package
-(cd artifacts && shasum -a 256 "wealthfolio-revolut-importer-0.1.0.zip" > SHA256SUMS)
+(cd artifacts && shasum -a 256 "wealthfolio-revolut-importer-$($PNPM exec node -p "require('./package.json').version")".zip > SHA256SUMS)
 $PNPM exec tsx scripts/write-acceptance-receipt.ts
+git diff --quiet && git diff --cached --quiet || { echo 'Release verification changed tracked files.' >&2; exit 1; }
