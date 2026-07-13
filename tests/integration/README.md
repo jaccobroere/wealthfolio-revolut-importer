@@ -1,6 +1,6 @@
 # Disposable Wealthfolio 3.6.1 host proof
 
-This harness is exclusively for the Revolut add-on's local T09 gate. It creates
+This harness is exclusively for the Revolut add-on's local integration gate. It creates
 the Compose project `wf-revolut-addon-test`, uses only the named volume
 `wf-revolut-addon-test-data`, and binds the host on loopback only.
 
@@ -26,7 +26,7 @@ real-statement parse-only test. The statement is uploaded to the disposable
 host, is never copied into this repository, and is never persisted through the
 import confirmation step.
 
-## T09 atomicity regression
+## Atomicity regression
 
 `tests/e2e/import.spec.ts` first runs the packaged add-on's normal
 `checkImport` flow. It then uses the authenticated disposable host's exact

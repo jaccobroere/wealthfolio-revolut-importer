@@ -5,7 +5,7 @@ Orientation for coding agents working in this repository.
 ## What this is
 
 A Wealthfolio **3.6.1** addon that imports Revolut investment CSV statements.
-Scaffolded from the official `@wealthfolio/addon-dev-tools@3.6.1` template.
+Based on the official `@wealthfolio/addon-dev-tools@3.6.1` template.
 
 ## Toolchain
 
@@ -57,4 +57,4 @@ Repository visibility, GitHub Actions enablement, release publication,
 production installation, and VPS pinning are each **separate explicit approval
 gates**. Do not enable Actions, publish a release, change visibility, or install
 in production without explicit authorization. Disposable Wealthfolio integration
-(T09) precedes release.
+precedes release.

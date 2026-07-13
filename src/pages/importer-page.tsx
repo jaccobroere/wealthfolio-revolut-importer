@@ -1,5 +1,5 @@
 /**
- * Revolut Importer page — four-step review/reconciliation wizard (T07).
+ * Revolut Importer page — four-step review/reconciliation wizard.
  *
  * State machine: `upload → mapping → review → reconcile → importing → done`.
  *

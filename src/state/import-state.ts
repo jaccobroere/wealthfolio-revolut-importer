@@ -1,7 +1,7 @@
 /**
  * Revolut importer wizard state machine.
  *
- * Pure state + selectors for the four-step review/reconciliation UI (T07).
+ * Pure state + selectors for the four-step review/reconciliation UI.
  * The state machine is the single source of truth for which step is active,
  * what has been uploaded/mapped/reviewed/reconciled, and whether Import is
  * enabled. UI components dispatch actions and read derived flags; they never
