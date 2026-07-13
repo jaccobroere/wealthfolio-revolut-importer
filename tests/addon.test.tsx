@@ -53,12 +53,9 @@ const { createRoot } = await import('react-dom/client');
 
 // --- Minimal fake AddonContext -------------------------------------------------
 
-type TestSidebarItemHandle = SidebarItemHandle & {
-  remove: ReturnType<typeof vi.fn>;
-};
-
 function createFakeContext() {
-  const sidebarItem: TestSidebarItemHandle = { remove: vi.fn() };
+  const remove = vi.fn<() => void>();
+  const sidebarItem = { remove } satisfies SidebarItemHandle;
   const sidebarCalls: { config: unknown }[] = [];
   const routerCalls: { config: unknown }[] = [];
   let disableCallback: (() => void) | null = null;
