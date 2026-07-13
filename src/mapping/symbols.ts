@@ -2,7 +2,7 @@
  * Ticker-only identifier handling. The pure core normalizes the raw Revolut
  * ticker string for review and matching; canonical symbol, exchange MIC,
  * quote currency, and provider resolution happen in the review workflow and
- * the Wealthfolio adapter (later tasks).
+ * the Wealthfolio adapter.
  */
 
 /** Trim and upper-case a raw ticker. Returns `''` for absent tickers. */

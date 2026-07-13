@@ -1,7 +1,7 @@
 /**
  * Revolut addon 3.6.1 sandbox lifecycle tests.
  *
- * Proves (see docs/SDK-CONTRACT.md and PLAN.md T06):
+ * Proves the documented SDK contract:
  *  1. `enable(ctx)` registers exactly one sidebar item and one route.
  *  2. Multiple `render({ root, location })` calls invoke `createRoot` exactly
  *     once and reuse the same root.

@@ -13,7 +13,7 @@ export type ActivitySubtype = 'FEE_REFUND' | 'BONUS';
 
 /**
  * A normalized, decimal-safe draft derived from exactly one Revolut source
- * row. This is the pure-core representation; the Wealthfolio adapter (T05+)
+ * row. This is the pure-core representation; the Wealthfolio adapter
  * converts drafts into the published `ActivityImport` / `ActivityCreate`
  * contracts.
  *

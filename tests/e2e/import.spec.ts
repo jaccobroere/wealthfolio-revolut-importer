@@ -208,7 +208,7 @@ test.describe.serial('installed Revolut package lifecycle', () => {
 
       const imports = [
         {
-          id: 't09-probe-valid-import',
+          id: 'synthetic-valid-import',
           accountId: account.id,
           activityType: 'DEPOSIT',
           date: '2026-07-13',
@@ -233,7 +233,7 @@ test.describe.serial('installed Revolut package lifecycle', () => {
         body: JSON.stringify({
           creates: [
             {
-              id: 't09-probe-valid-create',
+              id: 'synthetic-valid-create',
               accountId: account.id,
               activityType: 'DEPOSIT',
               activityDate: '2026-07-13',
@@ -241,7 +241,7 @@ test.describe.serial('installed Revolut package lifecycle', () => {
               currency: 'EUR',
             },
             {
-              id: 't09-probe-invalid-create',
+              id: 'synthetic-invalid-create',
               accountId: account.id,
               activityType: '',
               activityDate: '2026-07-13',
@@ -278,10 +278,10 @@ test.describe.serial('installed Revolut package lifecycle', () => {
     expect(probe.saved.created).toEqual([]);
     expect(probe.saved.errors).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 't09-probe-invalid-create', action: 'create' }),
+        expect.objectContaining({ id: 'synthetic-invalid-create', action: 'create' }),
       ]),
     );
-    expect(probe.persistedIds).not.toContain('t09-probe-valid-create');
-    expect(probe.persistedIds).not.toContain('t09-probe-invalid-create');
+    expect(probe.persistedIds).not.toContain('synthetic-valid-create');
+    expect(probe.persistedIds).not.toContain('synthetic-invalid-create');
   });
 });
