@@ -178,4 +178,110 @@ test.describe.serial('installed Revolut package lifecycle', () => {
     await expect(addon.getByTestId('review-continue')).toBeDisabled();
     expect(activityPosts).toEqual([]);
   });
+
+  test('returns no creates when a checked mixed bulk request contains an invalid create', async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto('/settings/accounts');
+    await page.getByRole('button', { name: 'Add account' }).click();
+    await page.getByRole('textbox', { name: 'Account Name' }).fill('Revolut Atomicity Probe');
+    await page.getByRole('radio', { name: /Transactions/ }).check();
+    await page.getByRole('button', { name: 'Add Account', exact: true }).click();
+
+    // The released v3.6.1 source maps this authenticated host route directly
+    // to activities.saveMany. The add-on UI cannot advance a mixed-validity
+    // batch past its review gate, so use the source-confirmed API only after
+    // the same read-only checkImport route. checkImport rejects an invalid
+    // type at HTTP validation, so it gates the valid row before saveMany; the
+    // invalid empty type is then accepted by the bulk JSON DTO but rejected
+    // during bulk-save preparation.
+    const probe = await page.evaluate(async () => {
+      const accounts = (await fetch('/api/v1/accounts').then((response) =>
+        response.json(),
+      )) as Array<{
+        id: string;
+        name: string;
+      }>;
+      const account = accounts.find(({ name }) => name === 'Revolut Atomicity Probe');
+      if (!account) throw new Error('Atomicity probe account is missing');
+
+      const imports = [
+        {
+          id: 't09-probe-valid-import',
+          accountId: account.id,
+          activityType: 'DEPOSIT',
+          date: '2026-07-13',
+          symbol: '',
+          amount: '11.00',
+          currency: 'EUR',
+          isValid: true,
+          isDraft: true,
+        },
+      ];
+      const checkedResponse = await fetch('/api/v1/activities/import/check', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ activities: imports }),
+      });
+      if (!checkedResponse.ok) throw new Error(`checkImport failed: ${checkedResponse.status}`);
+      const checked = (await checkedResponse.json()) as Array<{ id: string; isValid: boolean }>;
+
+      const savedResponse = await fetch('/api/v1/activities/bulk', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          creates: [
+            {
+              id: 't09-probe-valid-create',
+              accountId: account.id,
+              activityType: 'DEPOSIT',
+              activityDate: '2026-07-13',
+              amount: '11.00',
+              currency: 'EUR',
+            },
+            {
+              id: 't09-probe-invalid-create',
+              accountId: account.id,
+              activityType: '',
+              activityDate: '2026-07-13',
+              amount: '13.00',
+              currency: 'EUR',
+            },
+          ],
+        }),
+      });
+      if (!savedResponse.ok) throw new Error(`saveMany failed: ${savedResponse.status}`);
+      const saved = (await savedResponse.json()) as {
+        created: Array<{ id: string }>;
+        errors: Array<{ id?: string; action: string }>;
+      };
+
+      const searchResponse = await fetch('/api/v1/activities/search', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          page: 0,
+          pageSize: 100,
+          accountIdFilter: [account.id],
+          activityTypeFilter: ['DEPOSIT'],
+          sort: { id: 'date', desc: true },
+        }),
+      });
+      if (!searchResponse.ok) throw new Error(`activity search failed: ${searchResponse.status}`);
+      const search = (await searchResponse.json()) as { data: Array<{ id: string }> };
+
+      return { checked, saved, persistedIds: search.data.map(({ id }) => id) };
+    });
+
+    expect(probe.checked).toEqual([expect.objectContaining({ isValid: true })]);
+    expect(probe.saved.created).toEqual([]);
+    expect(probe.saved.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 't09-probe-invalid-create', action: 'create' }),
+      ]),
+    );
+    expect(probe.persistedIds).not.toContain('t09-probe-valid-create');
+    expect(probe.persistedIds).not.toContain('t09-probe-invalid-create');
+  });
 });
