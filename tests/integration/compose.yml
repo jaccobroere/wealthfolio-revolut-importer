@@ -10,10 +10,10 @@ services:
       WF_AUTH_PASSWORD_HASH: $$argon2id$$v=19$$m=65536,t=2,p=1$$d2ZhZGRvbnJldm9sdXR0ZXN0$$7hkMXqHBnds+ZQMhK4e3gLBa3w5S0IZmn6kZmIHQ2k8
       WF_CORS_ALLOW_ORIGINS: http://127.0.0.1:18881
     ports:
-      - "127.0.0.1:${WF_REVOLUT_TEST_PORT:-18881}:8088"
+      - '127.0.0.1:${WF_REVOLUT_TEST_PORT:-18881}:8088'
     volumes:
       - wf-revolut-addon-test-data:/data
-    restart: "no"
+    restart: 'no'
 
 volumes:
   wf-revolut-addon-test-data:
