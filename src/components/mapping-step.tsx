@@ -19,7 +19,7 @@ import { Button } from '@wealthfolio/ui';
 import { Card, CardContent, CardHeader, CardTitle } from '@wealthfolio/ui';
 import type { HostAPI, ImportMappingData, SymbolSearchResult } from '@wealthfolio/addon-sdk';
 import type { BatchResult } from '../domain/import-outcome';
-import type { TickerEntry, TickerResolution } from '../state/import-state';
+import type { TickerEntry, TickerResolution, UploadSummary } from '../state/import-state';
 import { buildTickerEntries } from '../state/import-state';
 import { AccountSelect } from './account-select';
 import {
@@ -32,6 +32,8 @@ import {
 export interface MappingStepProps {
   api: HostAPI;
   batch: BatchResult;
+  /** Privacy-safe aggregate retained after the upload step unmounts. */
+  uploadSummary: UploadSummary;
   accountId: string | null;
   tickers: Readonly<Record<string, TickerEntry>>;
   onSelectAccount: (accountId: string) => void;
@@ -44,6 +46,7 @@ export interface MappingStepProps {
 export function MappingStep({
   api,
   batch,
+  uploadSummary,
   accountId,
   tickers,
   onSelectAccount,
@@ -157,6 +160,20 @@ export function MappingStep({
 
   return (
     <div className="space-y-4">
+      <Card data-testid="parsed-statement-summary">
+        <CardHeader>
+          <CardTitle>File parsed successfully</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-sm">
+            <span data-testid="parsed-row-count">Rows: {uploadSummary.rowCount}</span>
+            {uploadSummary.minDate && uploadSummary.maxDate
+              ? ` · Date range: ${uploadSummary.minDate} to ${uploadSummary.maxDate}`
+              : ''}
+          </p>
+        </CardContent>
+      </Card>
+
       <AccountSelect api={api} accountId={accountId} onSelect={onSelectAccount} />
 
       <Card>
