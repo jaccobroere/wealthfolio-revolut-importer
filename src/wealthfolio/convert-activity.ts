@@ -91,7 +91,9 @@ export function toActivityImport(prepared: PreparedDraft, accountId: string): Ac
     activityType: toSdkActivityType(draft.activityType),
     subtype: toSdkSubtype(draft.subtype),
     date: draft.date,
-    symbol: isCash ? undefined : draft.ticker,
+    // Wealthfolio 3.6.1's HTTP ActivityImport DTO requires `symbol` even
+    // for cash movements; its import checker accepts the empty cash symbol.
+    symbol: isCash ? '' : draft.ticker,
     quantity: draft.quantity || undefined,
     unitPrice: draft.unitPrice?.amount || undefined,
     amount: draft.totalAmount.amount || undefined,
@@ -134,6 +136,8 @@ export function toActivityCreate(prepared: PreparedDraft, accountId: string): Ac
     fee: undefined,
     comment: undefined,
     fxRate: draft.fxRate || undefined,
-    metadata: meta as unknown as Record<string, unknown>,
+    // The released 3.6.1 server's NewActivity DTO receives metadata as a JSON
+    // string, then persists it as structured activity metadata.
+    metadata: JSON.stringify(meta),
   } satisfies ActivityCreate;
 }

@@ -53,7 +53,10 @@ export function ImportResult({ summary, onReset }: ImportResultProps) {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border p-3">
+    <div
+      className="rounded-md border p-3"
+      data-testid={`import-summary-${label.toLowerCase().replace(/ /g, '-')}`}
+    >
       <div className="text-muted-foreground text-xs">{label}</div>
       <div className="font-mono text-lg">{value}</div>
     </div>

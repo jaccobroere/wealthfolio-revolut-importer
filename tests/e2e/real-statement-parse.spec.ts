@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-test('real statement parse-only review is opt-in and never confirms an import', async ({ page }) => {
+test('real statement parse-only review is opt-in and never confirms an import', async ({
+  page,
+}) => {
   test.skip(!process.env.REVOLUT_ACCEPTANCE_CSV, 'REVOLUT_ACCEPTANCE_CSV is not configured');
   await page.goto('/addon/revolut-importer');
   await page.locator('input[type="file"]').setInputFiles(process.env.REVOLUT_ACCEPTANCE_CSV!);

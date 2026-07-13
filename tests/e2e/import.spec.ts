@@ -1,6 +1,16 @@
 import { expect, test } from '@playwright/test';
+import { Decimal } from 'decimal.js';
 
-import { installPackagedAddon, signIn, signInAndOnboard } from './helpers';
+import {
+  addonFrame,
+  createSyntheticAccount,
+  e2eInvalidStatement,
+  e2eOverlapStatement,
+  installPackagedAddon,
+  signIn,
+  signInAndOnboard,
+  uploadCashStatementToConfirmation,
+} from './helpers';
 
 test.describe.serial('installed Revolut package lifecycle', () => {
   test('installs the final ZIP and renders one route root across navigation', async ({ page }) => {
@@ -32,5 +42,140 @@ test.describe.serial('installed Revolut package lifecycle', () => {
     await expect(toggle).toBeChecked();
     await page.goto('/addon/revolut-importer');
     await expect(page.locator('[data-addon-id="revolut-importer"]')).toHaveCount(1);
+  });
+
+  test('checks synthetic imports before saving, persists metadata, and is duplicate safe', async ({
+    page,
+  }) => {
+    await signIn(page);
+    await createSyntheticAccount(page);
+    await uploadCashStatementToConfirmation(page);
+
+    const activityPosts: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/activities')) {
+        activityPosts.push(request.url());
+      }
+    });
+
+    await addonFrame(page)
+      .getByRole('button', { name: /^Import/ })
+      .click();
+    await expect(addonFrame(page).getByTestId('import-summary-created')).toHaveText(/Created\s*2/);
+
+    // Released 3.6.1 performs read-only validation, activity search/getAll,
+    // then bulk persistence in that order.
+    expect(activityPosts).toHaveLength(3);
+    expect(activityPosts[0]).toMatch(/activities\/import\/check$/);
+    expect(activityPosts[1]).toMatch(/activities\/search$/);
+    expect(activityPosts[2]).toMatch(/activities\/bulk$/);
+
+    // Direct host activity search/getAll evidence: metadata survives the write
+    // and is returned by the host's activity search API.
+    const activitySearch = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' && response.url().endsWith('/activities/search'),
+    );
+    await page.goto('/activities');
+    const searchedActivities = (await (await activitySearch).json()) as {
+      data: Array<{
+        activityType: 'DEPOSIT' | 'WITHDRAWAL';
+        amount: string;
+        metadata?: Record<string, unknown>;
+      }>;
+    };
+    expect(searchedActivities.data).toHaveLength(2);
+    expect(searchedActivities.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({ importerId: 'revolut-importer' }),
+        }),
+      ]),
+    );
+    const cashNet = searchedActivities.data.reduce(
+      (total, activity) =>
+        activity.activityType === 'WITHDRAWAL'
+          ? total.minus(activity.amount)
+          : total.plus(activity.amount),
+      new Decimal(0),
+    );
+    expect(cashNet.toFixed(2)).toBe('52.00');
+
+    // The host exposes mappings to the sandbox bridge. Persist a synthetic
+    // canonical identity, restart the add-on route, and read it back.
+    const mappingRoundTrip = await page.evaluate(async () => {
+      const accounts = (await fetch('/api/v1/accounts').then((response) =>
+        response.json(),
+      )) as Array<{
+        id: string;
+        name: string;
+      }>;
+      const account = accounts.find(({ name }) => name === 'Revolut E2E');
+      if (!account) throw new Error('Synthetic E2E account is missing');
+      const endpoint = `/api/v1/activities/import/mapping?accountId=${encodeURIComponent(account.id)}&contextKind=revolut`;
+      const current = (await fetch(endpoint).then((response) => response.json())) as {
+        accountId: string;
+        fieldMappings: Record<string, string | string[]>;
+        activityMappings: Record<string, string[]>;
+        symbolMappings: Record<string, string>;
+        accountMappings: Record<string, string>;
+      };
+      const mapping = {
+        ...current,
+        symbolMappings: { ...current.symbolMappings, 'SYNTH-E2E': 'SYNTH-E2E|XNAS|test' },
+      };
+      const saved = await fetch('/api/v1/activities/import/mapping', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapping }),
+      });
+      if (!saved.ok) throw new Error(`Could not save synthetic mapping: ${saved.status}`);
+      return { endpoint, expected: mapping.symbolMappings['SYNTH-E2E'] };
+    });
+    await page.goto('/addon/revolut-importer');
+    const persistedMapping = await page.evaluate(async (endpoint) => {
+      const response = await fetch(endpoint);
+      if (!response.ok) throw new Error(`Could not reload synthetic mapping: ${response.status}`);
+      return (await response.json()) as { symbolMappings: Record<string, string> };
+    }, mappingRoundTrip.endpoint);
+    expect(persistedMapping.symbolMappings['SYNTH-E2E']).toBe(mappingRoundTrip.expected);
+
+    // Exact repeat has no creates; the same source overlap retains only the two existing rows.
+    await uploadCashStatementToConfirmation(page);
+    await addonFrame(page)
+      .getByRole('button', { name: /^Import/ })
+      .click();
+    await expect(addonFrame(page).getByTestId('import-summary-created')).toHaveText(/Created\s*0/);
+    await expect(addonFrame(page).getByTestId('import-summary-skipped-duplicates')).toHaveText(
+      /Skipped duplicates\s*2/,
+    );
+
+    // Overlap contains the two existing rows plus one new deposit: only the
+    // new row is persisted.
+    await uploadCashStatementToConfirmation(page, e2eOverlapStatement);
+    await addonFrame(page)
+      .getByRole('button', { name: /^Import/ })
+      .click();
+    await expect(addonFrame(page).getByTestId('import-summary-created')).toHaveText(/Created\s*1/);
+    await expect(addonFrame(page).getByTestId('import-summary-skipped-duplicates')).toHaveText(
+      /Skipped duplicates\s*2/,
+    );
+  });
+
+  test('blocks an invalid synthetic row before any activity write', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/addon/revolut-importer');
+    const addon = addonFrame(page);
+    const activityPosts: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/activities')) {
+        activityPosts.push(request.url());
+      }
+    });
+    await addon.getByLabel('Revolut CSV file').setInputFiles(e2eInvalidStatement);
+    await addon.getByLabel('Destination account').selectOption({ label: 'Revolut E2E (EUR)' });
+    await addon.getByTestId('mapping-continue').click();
+    await expect(addon.getByTestId('review-continue')).toBeDisabled();
+    expect(activityPosts).toEqual([]);
   });
 });
