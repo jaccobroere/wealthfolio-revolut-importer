@@ -45,7 +45,7 @@ vi.mock('react-dom/client', () => ({
 }));
 
 // Imported after mocks are registered.
-import type { AddonContext } from '@wealthfolio/addon-sdk';
+import type { AddonContext, SidebarItemConfig, SidebarItemHandle } from '@wealthfolio/addon-sdk';
 const addonModule = await import('../src/addon');
 const enable = addonModule.default;
 
@@ -53,12 +53,9 @@ const { createRoot } = await import('react-dom/client');
 
 // --- Minimal fake AddonContext -------------------------------------------------
 
-interface SidebarItemHandle {
-  remove: ReturnType<typeof vi.fn>;
-}
-
 function createFakeContext() {
-  const sidebarItem: SidebarItemHandle = { remove: vi.fn() };
+  const remove = vi.fn<() => void>();
+  const sidebarItem = { remove } satisfies SidebarItemHandle;
   const sidebarCalls: { config: unknown }[] = [];
   const routerCalls: { config: unknown }[] = [];
   let disableCallback: (() => void) | null = null;
@@ -68,7 +65,7 @@ function createFakeContext() {
       root: {} as HTMLElement,
     },
     sidebar: {
-      addItem: vi.fn((config: unknown) => {
+      addItem: vi.fn((config: SidebarItemConfig): SidebarItemHandle => {
         sidebarCalls.push({ config });
         return sidebarItem;
       }),

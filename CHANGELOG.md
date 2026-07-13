@@ -1,11 +1,18 @@
 # Changelog
 
+Changes that affect users or maintainers are recorded here. Release-specific
+notes live under [`docs/releases/`](docs/releases/).
+
 ## Unreleased
 
-- Public-safe synthetic fixtures, local-only real-statement acceptance, and
-  deterministic tag-based ZIP releases.
+- Reorganized user, contributor, privacy, format, and release documentation.
+- Clarified the strict Revolut investment CSV contract and supported types.
 
 ## 0.1.0
 
-Prepared release notes are in `docs/releases/0.1.0.md`. Tagging and publishing
-remain explicit approval gates.
+- Wealthfolio 3.6.1 addon for Revolut investment CSV imports.
+- Explicit ticker mapping with account-scoped persistence.
+- Strict currency, amount, quantity, FX, duplicate, overlap, and reconciliation
+  validation.
+- Deterministic versioned ZIP packaging, checksums, privacy scanning, and
+  tag-based release validation.
