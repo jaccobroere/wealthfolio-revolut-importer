@@ -225,10 +225,11 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
         />
       )}
 
-      {state.step === 'mapping' && state.batch && (
+      {state.step === 'mapping' && state.batch && state.upload && (
         <MappingStep
           api={ctx.api}
           batch={state.batch}
+          uploadSummary={state.upload}
           accountId={state.accountId}
           tickers={state.tickers}
           onSelectAccount={handleSelectAccount}

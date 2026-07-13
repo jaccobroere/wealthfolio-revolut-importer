@@ -4,6 +4,7 @@ const port = process.env.WF_REVOLUT_TEST_PORT ?? '18881';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  workers: 1,
   timeout: 60_000,
   forbidOnly: true,
   retries: 0,

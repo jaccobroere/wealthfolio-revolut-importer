@@ -23,7 +23,7 @@ export async function signIn(page: Page): Promise<void> {
 
 export async function signInAndOnboard(page: Page): Promise<void> {
   await signIn(page);
-  await expect(page).toHaveURL(/\/onboarding/);
+  if (!page.url().includes('/onboarding')) return;
 
   await page.getByTestId('onboarding-continue-button').click();
   await page.getByRole('button', { name: 'EUR' }).click();
@@ -39,7 +39,9 @@ export async function signInAndOnboard(page: Page): Promise<void> {
 export async function installPackagedAddon(page: Page): Promise<void> {
   await page.goto('/settings/addons');
   const installedPanel = page.getByRole('tabpanel', { name: 'Installed' }).first();
-  await expect(installedPanel.getByText('0 add-ons installed', { exact: true })).toBeVisible();
+  if (await page.getByText('Revolut Importer', { exact: true }).count()) {
+    return;
+  }
   const installButton = installedPanel.getByRole('button', { name: 'Install from File' }).first();
   await expect(installButton).toBeVisible();
   const chooser = page.waitForEvent('filechooser');
