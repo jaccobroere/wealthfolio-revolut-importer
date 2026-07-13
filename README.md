@@ -6,8 +6,9 @@ duplicate-safe imports, and full row-level reconciliation.
 
 ## Status
 
-Private. Targeted at Wealthfolio host `3.6.1`. Initial release version `0.1.0`.
-Addon id `revolut-importer`; route `/addon/revolut-importer`.
+Targeted at Wealthfolio host `3.6.1`. Initial release version `0.1.0` is
+**BLOCKED** pending remaining T09 host proof. This repository has not published
+that release or validated a production host.
 
 Scaffolded from the official `@wealthfolio/addon-dev-tools@3.6.1` template.
 
@@ -45,21 +46,19 @@ pnpm test           # vitest run (synthetic fixtures only)
 pnpm lint
 pnpm format
 pnpm verify         # CI-safe: synthetic tests, build, privacy and ZIP validation
-pnpm verify:release # local only: requires REVOLUT_ACCEPTANCE_CSV
+pnpm verify:release # mandatory local release gate
 ```
 
-`pnpm verify` never reads a personal statement. `pnpm verify:release` is the
-mandatory local release gate: it requires `REVOLUT_ACCEPTANCE_CSV`, runs the
-summary-only acceptance suite, and creates `artifacts/wealthfolio-revolut-importer-0.1.0.zip`
-plus `artifacts/SHA256SUMS`. It does not publish, tag, or install anything.
+`pnpm verify` uses synthetic fixtures only. `pnpm verify:release` is the
+mandatory local release gate. It creates the versioned ZIP and `SHA256SUMS`,
+but does not publish, tag, or install anything.
 
-## Download and install ZIP
+## Future download and installation
 
-The ZIP is the distributable product. Download the versioned ZIP, verify it
-with `(cd artifacts && shasum -a 256 -c SHA256SUMS)`, then select that ZIP in
-Wealthfolio's add-on installer. The archive contains only the manifest, this
-README, and runtime build files; it does not contain source, tests, lockfiles,
-or statements.
+No ZIP is published while T09 is blocked. After a future approved immutable
+release, download its versioned ZIP directly, verify it against that release's
+`SHA256SUMS`, and select the verified ZIP in Wealthfolio's add-on installer.
+See `docs/INSTALL.md`, `docs/RELEASE.md`, and `docs/ROLLBACK.md`.
 
 ## Privacy
 
@@ -67,18 +66,12 @@ This addon never logs raw rows, filenames, account identifiers, balances, or
 order ids. See `docs/PRIVACY.md`. Real Revolut statements are **never**
 committed; only manually reviewed synthetic fixtures live in this repository.
 
-The local acceptance test reads a real statement through an environment variable
-only — see `.env.acceptance.example`:
-
-```bash
-cp .env.acceptance.example .env   # gitignored
-# edit .env to point REVOLUT_ACCEPTANCE_CSV at your real statement
-```
-
 ## Documentation
 
 - `docs/SDK-CONTRACT.md` — verified Wealthfolio 3.6.1 host/SDK contract.
 - `docs/PRIVACY.md` — privacy rules for code and output.
+- `docs/RELEASE.md` — blocked release status and future release controls.
+- `docs/INSTALL.md` / `docs/ROLLBACK.md` — future ZIP installation and safe rollback.
 
 ## License
 

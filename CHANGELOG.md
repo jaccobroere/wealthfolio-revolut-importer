@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Release-process documentation, a least-privilege verification workflow, and
+  safe dependency-update configuration.
+
 - T02 baseline: 3.6.1 toolchain (pnpm 10.34.5, Node 20.19.0, vite 7, strict TS),
   licensing (MIT), privacy rules, package normalization (id `revolut-importer`,
   name `wealthfolio-revolut-importer`), SDK contract docs, and the sandbox shell
@@ -39,6 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - unreleased
 
-Initial development version. Importer core, host adapter, and review UI land in
-later tasks (T04–T07); disposable-host integration (T09) and release (T10) are
-separate approval gates.
+Initial planned release. It is **BLOCKED** pending remaining T09 host proof;
+this entry does not represent a tag, published release, or installable
+production artifact.
