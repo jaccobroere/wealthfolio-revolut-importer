@@ -76,8 +76,22 @@ function toDetails(activity: Activity): ActivityDetails {
     createdAt: new Date(activity.createdAt),
     updatedAt: new Date(activity.updatedAt),
     assetId: activity.assetId ?? 'asset-1',
-    metadata: activity.metadata as Record<string, unknown> | undefined,
+    metadata: parseMetadata(activity.metadata),
   };
+}
+
+function parseMetadata(metadata: unknown): Record<string, unknown> | undefined {
+  if (typeof metadata === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(metadata);
+      return parsed !== null && typeof parsed === 'object'
+        ? (parsed as Record<string, unknown>)
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return metadata as Record<string, unknown> | undefined;
 }
 
 /** Build a fake `HostAPI` with in-memory state and call recording. */
@@ -141,7 +155,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
           amount: c.amount?.toString() ?? null,
           fee: c.fee?.toString() ?? null,
           currency: c.currency ?? 'EUR',
-          metadata: c.metadata as Record<string, unknown> | undefined,
+          metadata: parseMetadata(c.metadata),
           isUserModified: false,
           needsReview: true,
           createdAt: now,
