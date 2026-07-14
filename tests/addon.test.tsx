@@ -136,6 +136,20 @@ describe('Revolut addon 3.6.1+ sandbox lifecycle', () => {
     expect(fakeRoots[0]!.render).toHaveBeenCalledTimes(3);
   });
 
+  it('calls the undocumented onRendered acknowledgement after each render', () => {
+    const { ctx, routerCalls } = createFakeContext();
+    enable(ctx);
+    const render = (
+      routerCalls[0]!.config as {
+        render: (args: { root: HTMLElement; location: unknown; onRendered: () => void }) => void;
+      }
+    ).render;
+    const onRendered = vi.fn();
+    render({ root: makeRoot(), location: makeLocation(), onRendered });
+    expect(fakeRoots[0]!.render).toHaveBeenCalledTimes(1);
+    expect(onRendered).toHaveBeenCalledTimes(1);
+  });
+
   it('onDisable unmounts the root exactly once', () => {
     const { ctx, routerCalls, getDisable } = createFakeContext();
     enable(ctx);
