@@ -48,8 +48,7 @@ vi.mock('react-dom/client', () => ({
 
 // Imported after mocks are registered.
 import type { AddonContext } from '@wealthfolio/addon-sdk';
-const addonModule = await import('../src/addon');
-const enable = addonModule.default;
+const { enable } = await import('../src/addon');
 
 const { createRoot } = await import('react-dom/client');
 
@@ -135,6 +134,20 @@ describe('Revolut addon 3.6.1+ sandbox lifecycle', () => {
     expect(fakeRoots).toHaveLength(1);
     // The reused root's render is called once per render() invocation.
     expect(fakeRoots[0]!.render).toHaveBeenCalledTimes(3);
+  });
+
+  it('calls the undocumented onRendered acknowledgement after each render', () => {
+    const { ctx, routerCalls } = createFakeContext();
+    enable(ctx);
+    const render = (
+      routerCalls[0]!.config as {
+        render: (args: { root: HTMLElement; location: unknown; onRendered: () => void }) => void;
+      }
+    ).render;
+    const onRendered = vi.fn();
+    render({ root: makeRoot(), location: makeLocation(), onRendered });
+    expect(fakeRoots[0]!.render).toHaveBeenCalledTimes(1);
+    expect(onRendered).toHaveBeenCalledTimes(1);
   });
 
   it('onDisable unmounts the root exactly once', () => {

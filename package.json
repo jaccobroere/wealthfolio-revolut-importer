@@ -1,6 +1,6 @@
 {
   "name": "wealthfolio-revolut-importer",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "type": "module",
   "description": "Import Revolut investment CSV statements into Wealthfolio",
   "engines": {
@@ -74,7 +74,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "@wealthfolio/addon-dev-tools": "^3.6.0",
-    "@wealthfolio/addon-sdk": "^3.6.0",
+    "@wealthfolio/addon-sdk": "~3.6.1",
     "@wealthfolio/ui": "^3.6.0",
     "date-fns": "^4.4.0",
     "decimal.js": "10.6.0",
