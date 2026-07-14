@@ -1,20 +1,22 @@
 /**
- * Revolut addon 3.6.1 sandbox lifecycle tests.
+ * Revolut addon 3.6.1+ sandbox lifecycle tests.
  *
  * Proves the documented SDK contract:
- *  1. `enable(ctx)` registers exactly one sidebar item and one route.
+ *  1. `enable(ctx)` registers exactly one route (sidebar navigation is
+ *     manifest-declared via `contributes.links.sidebar`, so the runtime does
+ *     NOT call `ctx.sidebar.addItem`).
  *  2. Multiple `render({ root, location })` calls invoke `createRoot` exactly
  *     once and reuse the same root.
- *  3. `onDisable` removes the sidebar item exactly once and unmounts the root
- *     exactly once.
+ *  3. `onDisable` unmounts the root exactly once.
  *  4. After disable, a fresh `render` creates a new root (refs were cleared).
- *  5. Static: `src/addon.tsx` + `manifest.json` contain no `component:` /
- *     `contributes`, and `createRoot` is imported from `react-dom/client`.
+ *  5. Static: `src/addon.tsx` uses the manifest-declared navigation model
+ *     (runtime route id matches manifest route id, no singular `/addon/`,
+ *     no `sidebar.addItem`) and `createRoot` is imported from `react-dom/client`.
  *
  * `react-dom/client` is mocked so `createRoot` is a spy returning a fake root.
  * `@wealthfolio/ui` is mocked to avoid pulling the full UI library (which
  * touches `document`/`window` at import time) into the node test environment;
- * the lifecycle test only cares about root/sidebar/router wiring, not paint.
+ * the lifecycle test only cares about root/router wiring, not paint.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -45,7 +47,7 @@ vi.mock('react-dom/client', () => ({
 }));
 
 // Imported after mocks are registered.
-import type { AddonContext, SidebarItemConfig, SidebarItemHandle } from '@wealthfolio/addon-sdk';
+import type { AddonContext } from '@wealthfolio/addon-sdk';
 const addonModule = await import('../src/addon');
 const enable = addonModule.default;
 
@@ -54,8 +56,6 @@ const { createRoot } = await import('react-dom/client');
 // --- Minimal fake AddonContext -------------------------------------------------
 
 function createFakeContext() {
-  const remove = vi.fn<() => void>();
-  const sidebarItem = { remove } satisfies SidebarItemHandle;
   const sidebarCalls: { config: unknown }[] = [];
   const routerCalls: { config: unknown }[] = [];
   let disableCallback: (() => void) | null = null;
@@ -65,9 +65,9 @@ function createFakeContext() {
       root: {} as HTMLElement,
     },
     sidebar: {
-      addItem: vi.fn((config: SidebarItemConfig): SidebarItemHandle => {
+      addItem: vi.fn((config: unknown) => {
         sidebarCalls.push({ config });
-        return sidebarItem;
+        return { remove: vi.fn() };
       }),
     },
     router: {
@@ -83,7 +83,7 @@ function createFakeContext() {
     api: {} as AddonContext['api'],
   };
 
-  return { ctx, sidebarItem, sidebarCalls, routerCalls, getDisable: () => disableCallback };
+  return { ctx, sidebarCalls, routerCalls, getDisable: () => disableCallback };
 }
 
 function makeRoot(): HTMLElement {
@@ -92,35 +92,28 @@ function makeRoot(): HTMLElement {
   return {} as HTMLElement;
 }
 
-function makeLocation(pathname = '/addon/revolut-importer') {
+function makeLocation(pathname = '/addons/revolut-importer') {
   return { pathname, search: '', hash: '', params: {} };
 }
 
-describe('Revolut addon 3.6.1 sandbox lifecycle', () => {
+describe('Revolut addon 3.6.1+ sandbox lifecycle', () => {
   beforeEach(() => {
     fakeRoots.length = 0;
     vi.mocked(createRoot).mockClear();
   });
 
-  it('enable(ctx) registers one sidebar item and one route', () => {
+  it('enable(ctx) registers one route and does not call sidebar.addItem', () => {
     const { ctx, sidebarCalls, routerCalls } = createFakeContext();
     enable(ctx);
 
-    expect(sidebarCalls).toHaveLength(1);
+    // Sidebar navigation is manifest-declared; the runtime must not register it.
+    expect(sidebarCalls).toHaveLength(0);
     expect(routerCalls).toHaveLength(1);
-
-    const sidebarConfig = sidebarCalls[0]!.config as Record<string, unknown>;
-    expect(sidebarConfig).toMatchObject({
-      id: 'revolut-importer',
-      label: 'Revolut Importer',
-      icon: 'files',
-      route: '/addon/revolut-importer',
-    });
 
     const routeConfig = routerCalls[0]!.config as Record<string, unknown>;
     expect(routeConfig).toMatchObject({
-      id: 'revolut-importer',
-      path: '/addon/revolut-importer',
+      id: 'main',
+      path: '/addons/revolut-importer',
     });
     expect(typeof routeConfig.render).toBe('function');
   });
@@ -144,8 +137,8 @@ describe('Revolut addon 3.6.1 sandbox lifecycle', () => {
     expect(fakeRoots[0]!.render).toHaveBeenCalledTimes(3);
   });
 
-  it('onDisable removes the sidebar item exactly once and unmounts the root exactly once', () => {
-    const { ctx, sidebarItem, routerCalls, getDisable } = createFakeContext();
+  it('onDisable unmounts the root exactly once', () => {
+    const { ctx, routerCalls, getDisable } = createFakeContext();
     enable(ctx);
     const render = (
       routerCalls[0]!.config as { render: (args: { root: HTMLElement; location: unknown }) => void }
@@ -159,7 +152,6 @@ describe('Revolut addon 3.6.1 sandbox lifecycle', () => {
     expect(disable).not.toBeNull();
     disable!();
 
-    expect(sidebarItem.remove).toHaveBeenCalledTimes(1);
     expect(fakeRoots[0]!.unmount).toHaveBeenCalledTimes(1);
   });
 
@@ -184,14 +176,17 @@ describe('Revolut addon 3.6.1 sandbox lifecycle', () => {
   });
 
   it('onDisable is idempotent (second disable is a no-op)', () => {
-    const { ctx, sidebarItem, getDisable } = createFakeContext();
+    const { ctx, getDisable } = createFakeContext();
     enable(ctx);
 
     const disable = getDisable()!;
     disable();
     disable();
 
-    expect(sidebarItem.remove).toHaveBeenCalledTimes(1);
+    // The single root, if created, is unmounted exactly once.
+    if (fakeRoots.length > 0) {
+      expect(fakeRoots[0]!.unmount).toHaveBeenCalledTimes(1);
+    }
   });
 });
 
@@ -200,6 +195,10 @@ describe('Revolut addon 3.6.1 sandbox lifecycle', () => {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const addonSrc = readFileSync(resolve(repoRoot, 'src/addon.tsx'), 'utf8');
 const manifestSrc = readFileSync(resolve(repoRoot, 'manifest.json'), 'utf8');
+const manifest = JSON.parse(manifestSrc) as {
+  contributes?: { routes?: { id: string }[]; links?: { sidebar?: { route: string }[] } };
+  permissions?: { category: string; functions: string[] }[];
+};
 
 describe('Revolut addon static contract', () => {
   it('imports createRoot from react-dom/client', () => {
@@ -207,24 +206,50 @@ describe('Revolut addon static contract', () => {
     expect(addonSrc).toMatch(/createRoot/);
   });
 
-  it('addon.tsx has no component: / contributes / useLocation / useParams / QueryClientProvider', () => {
+  it('addon.tsx has no component: / useLocation / useParams / QueryClientProvider', () => {
     expect(addonSrc).not.toMatch(/\bcomponent\s*:/);
-    expect(addonSrc).not.toMatch(/\bcontributes\b/);
     expect(addonSrc).not.toMatch(/useLocation/);
     expect(addonSrc).not.toMatch(/useParams/);
     expect(addonSrc).not.toMatch(/QueryClientProvider/);
   });
 
-  it('manifest.json has no contributes field', () => {
-    expect(manifestSrc).not.toMatch(/"contributes"/);
+  it('manifest.json declares contributes with a "main" route', () => {
+    expect(manifest.contributes).toBeDefined();
+    expect(manifest.contributes!.routes).toBeDefined();
+    expect(manifest.contributes!.routes!.map((r) => r.id)).toContain('main');
   });
 
-  it('manifest.json has no component field', () => {
-    expect(manifestSrc).not.toMatch(/"component"/);
+  it('manifest.json sidebar links reference a declared route', () => {
+    const routeIds = new Set(manifest.contributes!.routes!.map((r) => r.id));
+    const sidebar = manifest.contributes!.links!.sidebar!;
+    for (const link of sidebar) {
+      expect(routeIds.has(link.route)).toBe(true);
+    }
   });
 
-  it('addon.tsx registers sidebar.addItem, router.add, and onDisable', () => {
-    expect(addonSrc).toMatch(/sidebar\.addItem/);
+  it('runtime route id matches the manifest route id', () => {
+    // The addon may pass a string literal or a ROUTE_ID const reference.
+    const constMatch = addonSrc.match(/const\s+ROUTE_ID\s*=\s*['"]([^'"]+)['"]/);
+    const literal = addonSrc.match(/ctx\.router\.add\(\s*\{[^}]*\bid:\s*['"]([^'"]+)['"]/s);
+    const ref = addonSrc.match(/ctx\.router\.add\(\s*\{[^}]*\bid:\s*([A-Za-z_$][\w$]*)/s);
+    const runtimeId = literal ? literal[1] : ref && constMatch ? constMatch[1] : undefined;
+    expect(runtimeId).toBe('main');
+  });
+
+  it('addon.tsx has no singular "/addon/" legacy path', () => {
+    expect(addonSrc).not.toMatch(/['"]\/addon\//);
+  });
+
+  it('addon.tsx does not call sidebar.addItem', () => {
+    expect(addonSrc).not.toMatch(/sidebar\.addItem\s*\(/);
+  });
+
+  it('manifest.json permissions do not request sidebar.addItem', () => {
+    const ui = manifest.permissions!.find((p) => p.category === 'ui');
+    expect(ui?.functions).not.toContain('sidebar.addItem');
+  });
+
+  it('addon.tsx registers router.add and onDisable', () => {
     expect(addonSrc).toMatch(/router\.add/);
     expect(addonSrc).toMatch(/onDisable/);
   });
