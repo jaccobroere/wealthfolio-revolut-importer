@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Import Revolut investment CSV statements into Wealthfolio",
+  "engines": {
+    "node": ">=22"
+  },
   "author": "Jacco Broere",
   "license": "MIT",
   "packageManager": "pnpm@10.34.5",
