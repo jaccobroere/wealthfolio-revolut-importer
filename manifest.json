@@ -1,7 +1,7 @@
 {
   "id": "revolut-importer",
   "name": "Revolut Importer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Import Revolut investment CSV statements into Wealthfolio with explicit symbol review, duplicate-safe imports, and full row-level reconciliation.",
   "author": "Jacco Broere",
   "main": "dist/addon.js",
@@ -24,8 +24,8 @@
   "permissions": [
     {
       "category": "ui",
-      "functions": ["sidebar.addItem", "router.add", "onDisable"],
-      "purpose": "Register the importer sidebar item and route, and clean up on disable"
+      "functions": ["router.add", "onDisable"],
+      "purpose": "Register the importer route and release addon state on disable"
     },
     {
       "category": "accounts",
@@ -42,5 +42,19 @@
       "functions": ["searchTicker"],
       "purpose": "Resolve source tickers to exchange instruments during the explicit symbol mapping step"
     }
-  ]
+  ],
+  "contributes": {
+    "routes": [{ "id": "main" }],
+    "links": {
+      "sidebar": [
+        {
+          "id": "main-nav",
+          "route": "main",
+          "label": "Revolut Import",
+          "icon": "files",
+          "order": 101
+        }
+      ]
+    }
+  }
 }
