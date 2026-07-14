@@ -1,7 +1,7 @@
 {
   "id": "revolut-importer",
   "name": "Revolut Importer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Import Revolut investment CSV statements into Wealthfolio with explicit symbol review, duplicate-safe imports, and full row-level reconciliation.",
   "author": "Jacco Broere",
   "main": "dist/addon.js",
