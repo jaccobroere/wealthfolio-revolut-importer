@@ -48,8 +48,7 @@ vi.mock('react-dom/client', () => ({
 
 // Imported after mocks are registered.
 import type { AddonContext } from '@wealthfolio/addon-sdk';
-const addonModule = await import('../src/addon');
-const enable = addonModule.default;
+const { enable } = await import('../src/addon');
 
 const { createRoot } = await import('react-dom/client');
 

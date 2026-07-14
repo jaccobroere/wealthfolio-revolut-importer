@@ -5,8 +5,17 @@ notes live under [`docs/releases/`](docs/releases/).
 
 ## Unreleased
 
-- Reorganized user, contributor, privacy, format, and release documentation.
-- Clarified the strict Revolut investment CSV contract and supported types.
+## 0.2.0
+
+- Manifest-declared sidebar navigation (`contributes.links.sidebar`); runtime
+  registers only the route renderer whose id matches the manifest route id.
+- Host dependencies derived from the SDK `HOST_DEPENDENCIES` map (single source
+  of truth across Vite externals, manifest, and peer dependencies).
+- Source-level sandbox-contract scan rejecting browser storage and direct
+  networking APIs.
+- `@wealthfolio/addon-sdk` dev dependency pinned to `~3.6.1`.
+- Standardized to a named `enable` export (was a default export).
+- No change to import parsing semantics.
 
 ## 0.1.0
 

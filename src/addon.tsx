@@ -29,7 +29,7 @@ const ROUTE_ID = 'main';
 /** Sandbox route path (plural, manifest-id-derived). */
 const ROUTE_PATH = '/addons/revolut-importer';
 
-export default function enable(ctx: AddonContext): void {
+export function enable(ctx: AddonContext): void {
   let root: Root | null = null;
 
   // Sidebar navigation is manifest-declared (`contributes.links.sidebar`); the
