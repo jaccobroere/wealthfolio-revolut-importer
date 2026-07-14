@@ -1,9 +1,7 @@
 {
   "repository": "wealthfolio-revolut-importer",
   "version": "0.1.0",
-  "releaseCommit": "SET_BEFORE_TAGGING",
   "zipFilename": "wealthfolio-revolut-importer-0.1.0.zip",
-  "zipSha256": "SET_BEFORE_TAGGING",
   "localAcceptancePassed": true,
   "disposableHostTestsPassed": true
 }
