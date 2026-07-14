@@ -3,7 +3,7 @@
 Import a Revolut investment CSV into Wealthfolio with strict validation,
 explicit ticker review, reconciliation diagnostics, and duplicate-safe writes.
 
-This addon is designed for Wealthfolio 3.6.1. It reads the exported file
+This addon is designed for Wealthfolio 3.6.1+. It reads the exported file
 locally; it does not connect to Revolut and does not send your statement to a
 service.
 
@@ -11,9 +11,13 @@ service.
 
 ## Compatibility
 
+- Wealthfolio: >= 3.6.1
+- Add-on SDK: 3.6.x (built against ~3.6.1)
+- Tested with Wealthfolio: 3.6.2
+
 | Component     | Supported version or format                  |
 | ------------- | -------------------------------------------- |
-| Wealthfolio   | 3.6.1                                        |
+| Wealthfolio   | >= 3.6.1                                     |
 | Addon package | `wealthfolio-revolut-importer-<version>.zip` |
 | Source file   | Revolut investment CSV schema v1             |
 | License       | MIT; see [LICENSE](LICENSE)                  |
