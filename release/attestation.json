@@ -1,7 +1,7 @@
 {
   "repository": "wealthfolio-revolut-importer",
-  "version": "0.2.0",
-  "zipFilename": "wealthfolio-revolut-importer-0.2.0.zip",
+  "version": "0.2.1",
+  "zipFilename": "wealthfolio-revolut-importer-0.2.1.zip",
   "localAcceptancePassed": true,
   "disposableHostTestsPassed": true
 }
