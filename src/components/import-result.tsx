@@ -13,9 +13,10 @@ import type { ImportSummary } from '../state/import-state';
 export interface ImportResultProps {
   summary: ImportSummary;
   onReset: () => void;
+  onReviewMappings: () => void;
 }
 
-export function ImportResult({ summary, onReset }: ImportResultProps) {
+export function ImportResult({ summary, onReset, onReviewMappings }: ImportResultProps) {
   const hasFatal = !!summary.fatal;
   return (
     <Card>
@@ -26,7 +27,14 @@ export function ImportResult({ summary, onReset }: ImportResultProps) {
         {hasFatal && (
           <Alert variant="destructive">
             <AlertTitle>Fatal error</AlertTitle>
-            <AlertDescription>{summary.fatal}</AlertDescription>
+            <AlertDescription>
+              <p>{summary.fatal}</p>
+              <p className="mt-2">
+                The host rejected the bulk request before it returned row-level results. The
+                importer did not retry automatically, so it cannot create a partial or duplicate
+                import.
+              </p>
+            </AlertDescription>
           </Alert>
         )}
 
@@ -35,12 +43,16 @@ export function ImportResult({ summary, onReset }: ImportResultProps) {
           <Stat label="Created" value={summary.created} />
           <Stat label="Skipped duplicates" value={summary.skippedDuplicates} />
           <Stat label="Blocked" value={summary.blocked} />
-          <Stat label="Failed" value={summary.failed} />
+          <Stat
+            label={hasFatal ? 'Batch status' : 'Failed'}
+            value={hasFatal ? 'Not written' : summary.failed}
+          />
         </div>
 
         <p className="text-muted-foreground text-sm">
-          Only activities reported as created by the host were written. Failed or blocked rows were
-          not imported.
+          {hasFatal
+            ? 'No per-activity outcome was returned. Review mappings and retry deliberately.'
+            : 'Only activities reported as created by the host were written. Failed or blocked rows were not imported.'}
         </p>
 
         {summary.failures.length > 0 && (
@@ -59,7 +71,12 @@ export function ImportResult({ summary, onReset }: ImportResultProps) {
           </Alert>
         )}
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3">
+          {hasFatal ? (
+            <Button variant="outline" onClick={onReviewMappings}>
+              Review mappings
+            </Button>
+          ) : null}
           <Button onClick={onReset}>Start a new import</Button>
         </div>
       </CardContent>
@@ -67,7 +84,7 @@ export function ImportResult({ summary, onReset }: ImportResultProps) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div
       className="rounded-md border p-3"

@@ -109,7 +109,7 @@ export async function runImport(
   try {
     checked = await checkImport(api, imports);
   } catch (err) {
-    result.fatal = safeHostFailureMessage(err);
+    result.fatal = safeHostFailureMessage(err, 'batch');
     return result;
   }
 
@@ -154,8 +154,11 @@ export async function runImport(
   try {
     mutation = await saveCreates(api, creates);
   } catch (err) {
-    // Fatal: no fingerprints are marked imported.
-    result.fatal = safeHostFailureMessage(err);
+    // Fatal: no fingerprints are marked imported. Do not retry subsets here:
+    // the host can create assets/FX pairs while preparing a request, and an
+    // automatic retry would turn a single explicit import into an ambiguous
+    // partial-write workflow.
+    result.fatal = safeHostFailureMessage(err, 'batch');
     result.failedFingerprints = accepted.map(({ prepared }) => prepared.fingerprint);
     return result;
   }
@@ -216,7 +219,7 @@ export { IMPORTER_ID };
  * Host messages may contain account ids or source-derived values. Render only
  * stable, actionable categories in the sandbox UI.
  */
-function safeHostFailureMessage(error: unknown): string {
+function safeHostFailureMessage(error: unknown, scope: 'activity' | 'batch' = 'activity'): string {
   const text =
     typeof error === 'string'
       ? error
@@ -232,5 +235,7 @@ function safeHostFailureMessage(error: unknown): string {
   if (/asset-backed|asset_id|symbol/i.test(text)) {
     return 'The security mapping is incomplete. Re-select the instrument.';
   }
-  return 'Wealthfolio rejected this activity. Review the destination account and mapping.';
+  return scope === 'batch'
+    ? 'Wealthfolio could not complete this import batch. Re-check the destination account and security mappings, then retry.'
+    : 'Wealthfolio rejected this activity. Review the destination account and mapping.';
 }

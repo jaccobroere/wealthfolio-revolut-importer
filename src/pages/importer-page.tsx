@@ -75,9 +75,12 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
     dispatch({ type: 'TICKERS_INITIALIZED', tickers });
   }, []);
 
-  const handleTickerResolved = useCallback((ticker: string, identity: CanonicalIdentity) => {
-    dispatch({ type: 'TICKER_RESOLVED', ticker, identity });
-  }, []);
+  const handleTickerResolved = useCallback(
+    (ticker: string, identity: CanonicalIdentity, fromSaved = false) => {
+      dispatch({ type: 'TICKER_RESOLVED', ticker, identity, fromSaved });
+    },
+    [],
+  );
 
   const handleTickerResolutionSet = useCallback((ticker: string, resolution: TickerResolution) => {
     dispatch({ type: 'TICKER_RESOLUTION_SET', ticker, resolution });
@@ -233,6 +236,7 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
           onTickersInitialized={handleTickersInitialized}
           onTickerResolved={handleTickerResolved}
           onTickerResolutionSet={handleTickerResolutionSet}
+          onBack={() => dispatch({ type: 'RESET' })}
           onContinue={goToReview}
         />
       )}
@@ -256,7 +260,15 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
       )}
 
       {(state.step === 'importing' || state.step === 'done') && state.importSummary && (
-        <ImportResult summary={state.importSummary} onReset={handleReset} />
+        <ImportResult
+          summary={state.importSummary}
+          onReset={handleReset}
+          onReviewMappings={() => {
+            if (!state.accountId) return;
+            dispatch({ type: 'SELECT_ACCOUNT', accountId: state.accountId });
+            dispatch({ type: 'GOTO', step: 'mapping' });
+          }}
+        />
       )}
 
       {state.step === 'importing' && !state.importSummary && (

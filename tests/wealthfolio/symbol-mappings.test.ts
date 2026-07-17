@@ -18,6 +18,7 @@ import {
   resolveSymbol,
   resultToIdentity,
   withSavedMapping,
+  withoutSavedMapping,
 } from '../../src/wealthfolio/symbol-mappings';
 import { IMPORTER_ID } from '../../src/wealthfolio/types';
 
@@ -175,5 +176,23 @@ describe('Revolut adapter: symbol mappings', () => {
     const updated = withSavedMapping(original, 'AAPL', { symbol: 'AAPL' });
     expect(original.symbolMappings).toEqual({});
     expect(updated.symbolMappings[`${IMPORTER_ID}::AAPL`]).toContain('AAPL');
+  });
+
+  it('removes only the selected Revolut mapping without mutating the host document', () => {
+    const original: ImportMappingData = {
+      ...emptyMapping(),
+      symbolMappings: {
+        [`${IMPORTER_ID}::AAPL`]: JSON.stringify({ symbol: 'OUTDATED' }),
+        [`${IMPORTER_ID}::MSFT`]: JSON.stringify({ symbol: 'MSFT' }),
+        'degiro-importer::AAPL': JSON.stringify({ symbol: 'AAPL' }),
+      },
+    };
+
+    const updated = withoutSavedMapping(original, 'AAPL');
+
+    expect(updated.symbolMappings[`${IMPORTER_ID}::AAPL`]).toBeUndefined();
+    expect(updated.symbolMappings[`${IMPORTER_ID}::MSFT`]).toBeDefined();
+    expect(updated.symbolMappings['degiro-importer::AAPL']).toBeDefined();
+    expect(original.symbolMappings[`${IMPORTER_ID}::AAPL`]).toBeDefined();
   });
 });

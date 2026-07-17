@@ -159,7 +159,7 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(result.importedFingerprints).toHaveLength(0);
     expect(result.failedFingerprints).toHaveLength(2);
     expect(result.fatal).toBe(
-      'Wealthfolio rejected this activity. Review the destination account and mapping.',
+      'Wealthfolio could not complete this import batch. Re-check the destination account and security mappings, then retry.',
     );
     expect(host.storedActivities).toHaveLength(0);
   });
@@ -261,7 +261,7 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(result.attempted).toBe(0);
     expect(result.created).toBe(0);
     expect(result.fatal).toBe(
-      'Wealthfolio rejected this activity. Review the destination account and mapping.',
+      'Wealthfolio could not complete this import batch. Re-check the destination account and security mappings, then retry.',
     );
     expect(host.saveManyCalls).toHaveLength(0);
   });

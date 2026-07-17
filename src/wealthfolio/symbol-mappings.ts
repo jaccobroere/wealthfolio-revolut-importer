@@ -93,6 +93,20 @@ export function withSavedMapping(
 }
 
 /**
+ * Remove one remembered mapping owned by this add-on without touching other
+ * symbols or other add-ons' mappings in the host-owned account document.
+ */
+export function withoutSavedMapping(
+  mapping: ImportMappingData,
+  sourceTicker: string,
+): ImportMappingData {
+  const key = mappingKey(sourceTicker);
+  const symbolMappings = { ...(mapping.symbolMappings ?? {}) };
+  delete symbolMappings[key];
+  return { ...mapping, symbolMappings };
+}
+
+/**
  * Convert a `SymbolSearchResult` to a `CanonicalIdentity`.
  */
 export function resultToIdentity(result: SymbolSearchResult): CanonicalIdentity {
