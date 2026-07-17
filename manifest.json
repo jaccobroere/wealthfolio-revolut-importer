@@ -1,7 +1,7 @@
 {
   "id": "revolut-importer",
   "name": "Revolut Importer",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Import Revolut investment CSV statements into Wealthfolio with explicit symbol review, duplicate-safe imports, and full row-level reconciliation.",
   "author": "Jacco Broere",
   "main": "dist/addon.js",
@@ -34,7 +34,7 @@
     },
     {
       "category": "activities",
-      "functions": ["getAll", "checkImport", "saveMany", "getImportMapping", "saveImportMapping"],
+      "functions": ["getAll", "checkImport", "import", "getImportMapping", "saveImportMapping"],
       "purpose": "Validate and import Revolut activities, detect prior imports, and persist ticker-to-instrument mappings"
     },
     {
