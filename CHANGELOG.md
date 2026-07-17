@@ -5,6 +5,13 @@ notes live under [`docs/releases/`](docs/releases/).
 
 ## Unreleased
 
+## 0.2.4
+
+- Made stale remembered ticker mappings visible, replaceable, and safely
+  removable within the selected account.
+- Added mapping search/retry and start-over recovery actions, plus a safe
+  return-to-mapping path after a host-level bulk-write rejection.
+
 ## 0.2.3
 
 - Added native drag-and-drop CSV upload feedback and corrected account-scoped
