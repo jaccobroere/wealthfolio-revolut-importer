@@ -4,14 +4,13 @@
  * Targets the published `@wealthfolio/addon-sdk` 3.6.1, which supports only the
  * `render`-callback route model. (The host-managed `component` route model is
  * unreleased — it lands in 3.6.2 — so migration to it is future work, not
- * pending cleanup.) Sidebar navigation is manifest-declared
- * (`contributes.links.sidebar`); the runtime registers only the route
- * renderer, with an id (`main`) that exactly matches `contributes.routes[].id`
- * in the manifest (a mismatch renders a blank page).
+ * pending cleanup.) In the 3.6.1 host, sidebar navigation is registered at
+ * runtime along with the route; manifest-declared navigation was introduced
+ * after this host version.
  *
  * Verified contract (see docs/SDK-CONTRACT.md):
- * - `enable(ctx)` registers one route via `ctx.router.add({ id, path, render })`.
- *   `id` must equal `manifest.json` `contributes.routes[].id`.
+ * - `enable(ctx)` registers a sidebar item and route via
+ *   `ctx.sidebar.addItem(...)` and `ctx.router.add({ id, path, render })`.
  * - `render({ root, location })` creates exactly ONE React root with
  *   `createRoot(root)` (imported from `react-dom/client`), reuses it across
  *   renders, and renders `<ImporterPage ctx={ctx} location={location} />`.
@@ -24,27 +23,29 @@
  *   re-verify against the host if the SDK changes.
  * - `ctx.onDisable()` unmounts the root exactly once and clears refs so a later
  *   `render` starts fresh.
- * - No `ctx.sidebar.addItem` — navigation comes from `contributes.links.sidebar`.
  * - No `component` route field, no `ReactDOM` globals, no QueryClient provider.
  */
 import { createRoot, type Root } from 'react-dom/client';
 import type { AddonContext, AddonRouteRenderContext } from '@wealthfolio/addon-sdk';
 import { ImporterPage } from './pages/importer-page';
 
-/** Route id — MUST match `manifest.json` `contributes.routes[].id`. */
 const ROUTE_ID = 'main';
-/** Sandbox route path (plural, manifest-id-derived). */
-const ROUTE_PATH = '/addons/revolut-importer';
+/** Wealthfolio 3.6.1 add-on route namespace. */
+const ROUTE_PATH = '/addon/revolut-importer';
 
 export function enable(ctx: AddonContext): void {
   // Function-local per-enable state. Each `enable` starts fresh, so no
   // module-scoped mutable state, no double-enable guard, and no test-only
   // reset helper is needed.
   let root: Root | null = null;
-
-  // Sidebar navigation is manifest-declared (`contributes.links.sidebar`); the
-  // runtime registers only the route renderer. The route id MUST match the
-  // manifest's declared route id.
+  let sidebarRemoved = false;
+  const sidebarItem = ctx.sidebar.addItem({
+    id: 'revolut-importer',
+    label: 'Revolut Import',
+    icon: 'files',
+    route: ROUTE_PATH,
+    order: 101,
+  });
   ctx.router.add({
     id: ROUTE_ID,
     path: ROUTE_PATH,
@@ -63,6 +64,10 @@ export function enable(ctx: AddonContext): void {
   });
 
   ctx.onDisable(() => {
+    if (!sidebarRemoved) {
+      sidebarItem.remove();
+      sidebarRemoved = true;
+    }
     // Unmount the React root exactly once.
     if (root !== null) {
       root.unmount();

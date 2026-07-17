@@ -2,16 +2,15 @@
  * Revolut addon 3.6.1+ sandbox lifecycle tests.
  *
  * Proves the documented SDK contract:
- *  1. `enable(ctx)` registers exactly one route (sidebar navigation is
- *     manifest-declared via `contributes.links.sidebar`, so the runtime does
- *     NOT call `ctx.sidebar.addItem`).
+ *  1. `enable(ctx)` registers the Wealthfolio 3.6.1 runtime sidebar item and
+ *     exactly one route.
  *  2. Multiple `render({ root, location })` calls invoke `createRoot` exactly
  *     once and reuse the same root.
  *  3. `onDisable` unmounts the root exactly once.
  *  4. After disable, a fresh `render` creates a new root (refs were cleared).
- *  5. Static: `src/addon.tsx` uses the manifest-declared navigation model
- *     (runtime route id matches manifest route id, no singular `/addon/`,
- *     no `sidebar.addItem`) and `createRoot` is imported from `react-dom/client`.
+ *  5. Static: `src/addon.tsx` uses the 3.6.1 runtime navigation model
+ *     (singular `/addon/` route and `sidebar.addItem`) and `createRoot` is
+ *     imported from `react-dom/client`.
  *
  * `react-dom/client` is mocked so `createRoot` is a spy returning a fake root.
  * `@wealthfolio/ui` is mocked to avoid pulling the full UI library (which
@@ -91,7 +90,7 @@ function makeRoot(): HTMLElement {
   return {} as HTMLElement;
 }
 
-function makeLocation(pathname = '/addons/revolut-importer') {
+function makeLocation(pathname = '/addon/revolut-importer') {
   return { pathname, search: '', hash: '', params: {} };
 }
 
@@ -101,18 +100,24 @@ describe('Revolut addon 3.6.1+ sandbox lifecycle', () => {
     vi.mocked(createRoot).mockClear();
   });
 
-  it('enable(ctx) registers one route and does not call sidebar.addItem', () => {
+  it('enable(ctx) registers the sidebar item and one route', () => {
     const { ctx, sidebarCalls, routerCalls } = createFakeContext();
     enable(ctx);
 
-    // Sidebar navigation is manifest-declared; the runtime must not register it.
-    expect(sidebarCalls).toHaveLength(0);
+    expect(sidebarCalls).toHaveLength(1);
+    expect(sidebarCalls[0]!.config).toEqual({
+      id: 'revolut-importer',
+      label: 'Revolut Import',
+      icon: 'files',
+      route: '/addon/revolut-importer',
+      order: 101,
+    });
     expect(routerCalls).toHaveLength(1);
 
     const routeConfig = routerCalls[0]!.config as Record<string, unknown>;
     expect(routeConfig).toMatchObject({
       id: 'main',
-      path: '/addons/revolut-importer',
+      path: '/addon/revolut-importer',
     });
     expect(typeof routeConfig.render).toBe('function');
   });
@@ -209,7 +214,6 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const addonSrc = readFileSync(resolve(repoRoot, 'src/addon.tsx'), 'utf8');
 const manifestSrc = readFileSync(resolve(repoRoot, 'manifest.json'), 'utf8');
 const manifest = JSON.parse(manifestSrc) as {
-  contributes?: { routes?: { id: string }[]; links?: { sidebar?: { route: string }[] } };
   permissions?: { category: string; functions: string[] }[];
 };
 
@@ -226,21 +230,7 @@ describe('Revolut addon static contract', () => {
     expect(addonSrc).not.toMatch(/QueryClientProvider/);
   });
 
-  it('manifest.json declares contributes with a "main" route', () => {
-    expect(manifest.contributes).toBeDefined();
-    expect(manifest.contributes!.routes).toBeDefined();
-    expect(manifest.contributes!.routes!.map((r) => r.id)).toContain('main');
-  });
-
-  it('manifest.json sidebar links reference a declared route', () => {
-    const routeIds = new Set(manifest.contributes!.routes!.map((r) => r.id));
-    const sidebar = manifest.contributes!.links!.sidebar!;
-    for (const link of sidebar) {
-      expect(routeIds.has(link.route)).toBe(true);
-    }
-  });
-
-  it('runtime route id matches the manifest route id', () => {
+  it('runtime route id is stable', () => {
     // The addon may pass a string literal or a ROUTE_ID const reference.
     const constMatch = addonSrc.match(/const\s+ROUTE_ID\s*=\s*['"]([^'"]+)['"]/);
     const literal = addonSrc.match(/ctx\.router\.add\(\s*\{[^}]*\bid:\s*['"]([^'"]+)['"]/s);
@@ -249,17 +239,17 @@ describe('Revolut addon static contract', () => {
     expect(runtimeId).toBe('main');
   });
 
-  it('addon.tsx has no singular "/addon/" legacy path', () => {
-    expect(addonSrc).not.toMatch(/['"]\/addon\//);
+  it('addon.tsx uses the Wealthfolio 3.6.1 route namespace', () => {
+    expect(addonSrc).toMatch(/['"]\/addon\/revolut-importer['"]/);
   });
 
-  it('addon.tsx does not call sidebar.addItem', () => {
-    expect(addonSrc).not.toMatch(/sidebar\.addItem\s*\(/);
+  it('addon.tsx registers its sidebar item at runtime', () => {
+    expect(addonSrc).toMatch(/sidebar\.addItem\s*\(/);
   });
 
-  it('manifest.json permissions do not request sidebar.addItem', () => {
+  it('manifest.json requests sidebar.addItem permission', () => {
     const ui = manifest.permissions!.find((p) => p.category === 'ui');
-    expect(ui?.functions).not.toContain('sidebar.addItem');
+    expect(ui?.functions).toContain('sidebar.addItem');
   });
 
   it('addon.tsx registers router.add and onDisable', () => {

@@ -5,6 +5,12 @@ notes live under [`docs/releases/`](docs/releases/).
 
 ## Unreleased
 
+## 0.2.2
+
+- Restored the runtime sidebar entry and `/addon/revolut-importer` route
+  required by the Wealthfolio 3.6.1 host. This makes the importer visible and
+  reachable after installation.
+
 ## 0.2.1
 
 - Same as 0.2.0 (the v0.2.0 tag was burned: its release workflow failed on an
