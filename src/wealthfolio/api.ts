@@ -13,6 +13,7 @@ import type {
   ActivityDetails,
   ActivityImport,
   HostAPI,
+  ImportActivitiesResult,
   ImportMappingData,
   SymbolSearchResult,
 } from '@wealthfolio/addon-sdk';
@@ -32,6 +33,18 @@ export function getActivities(api: HostAPI, accountId: string): Promise<Activity
  * before any write. Fatal host errors propagate as rejections. */
 export function checkImport(api: HostAPI, activities: ActivityImport[]): Promise<ActivityImport[]> {
   return api.activities.checkImport(activities);
+}
+
+/**
+ * Commit reviewed rows through Wealthfolio's import workflow rather than the
+ * low-level activity-editor bulk endpoint. The import API owns duplicate
+ * detection and import-run bookkeeping in Wealthfolio 3.6.1.
+ */
+export function importCheckedActivities(
+  api: HostAPI,
+  activities: ActivityImport[],
+): Promise<ImportActivitiesResult> {
+  return api.activities.import(activities);
 }
 
 /**

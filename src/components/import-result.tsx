@@ -30,7 +30,7 @@ export function ImportResult({ summary, onReset, onReviewMappings }: ImportResul
             <AlertDescription>
               <p>{summary.fatal}</p>
               <p className="mt-2">
-                The host rejected the bulk request before it returned row-level results. The
+                The host rejected the reviewed import before it returned row-level results. The
                 importer did not retry automatically, so it cannot create a partial or duplicate
                 import.
               </p>

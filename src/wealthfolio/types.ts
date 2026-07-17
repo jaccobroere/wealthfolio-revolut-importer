@@ -79,9 +79,9 @@ export interface ImportFailure {
 
 /** Result of the import flow. */
 export interface ImportFlowResult {
-  /** Number of rows sent to `saveMany` as creates. */
+  /** Number of reviewed rows submitted to Wealthfolio's import API. */
   attempted: number;
-  /** Number of rows reported created by `saveMany` (authoritative). */
+  /** Number of rows reported imported by Wealthfolio (authoritative). */
   created: number;
   /** Fingerprints that were marked imported (only those in `created`). */
   importedFingerprints: string[];
@@ -92,8 +92,8 @@ export interface ImportFlowResult {
   /** Rows blocked from import (host validation errors, UNKNOWN type, or
    * unresolved symbols). */
   blocked: number;
-  /** Row-level errors returned by the host bulk-save endpoint. */
+  /** Row-level errors returned by the host import endpoint. */
   failures: ImportFailure[];
-  /** Fatal host error, when `checkImport` or `saveMany` threw. */
+  /** Fatal host error, when `checkImport` or `import` threw. */
   fatal?: string;
 }

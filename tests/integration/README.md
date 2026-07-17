@@ -28,15 +28,10 @@ import confirmation step.
 
 ## Atomicity regression
 
-`tests/e2e/import.spec.ts` first runs the packaged add-on's normal
-`checkImport` flow. It then uses the authenticated disposable host's exact
-released-source routes (`POST /api/v1/activities/import/check`, whose body is
-`{ activities }`, and `POST /api/v1/activities/bulk`, whose body is
-`{ creates }`) because the UI correctly prevents a mixed-validity batch from
-reaching save. The synthetic bulk request has one valid deposit and one empty
-activity type. The test requires zero returned creates, an error for the
-invalid create, and neither probe ID in a follow-up activity search. This is
-the 3.6.1 all-or-nothing proof; it does not use a production host or data.
+`tests/e2e/import.spec.ts` exercises the packaged add-on's normal
+`checkImport` then `import` flow. The host owns import-specific duplicate
+detection and import-run bookkeeping; the add-on never calls the lower-level
+`activities/bulk` editor endpoint for a broker statement.
 
 ## Teardown
 

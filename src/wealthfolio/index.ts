@@ -18,6 +18,7 @@ export {
   getAllAccounts,
   getActivities,
   checkImport,
+  importCheckedActivities,
   saveCreates,
   getImportMapping,
   saveImportMapping,

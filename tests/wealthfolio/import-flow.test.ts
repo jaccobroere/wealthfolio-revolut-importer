@@ -2,18 +2,15 @@
  * Idempotent import flow tests for the Revolut adapter.
  *
  * Proves with a fake/in-memory HostAPI:
- * 1. Identical second import performs zero `saveMany` creates.
- * 2. Overlapping import creates only new rows.
- * 3. Failed/partial `saveMany` never marks failed fingerprints as imported.
- * 4. Each add-on ignores the other's metadata.
- * 5. `saveMany` is always called with `{ creates }` (never a bare array);
- *    `deleteIds` is never produced; metadata is non-sensitive.
+ * 1. Reviewed rows are committed through `activities.import`, never saveMany.
+ * 2. Wealthfolio owns duplicate outcomes for import-API writes.
+ * 3. Rejected/incomplete imports never mark fingerprints as imported.
+ * 4. Legacy add-on metadata remains scoped to its owning importer.
  * 6. `UNKNOWN` activity types are blocked (never sent to the host).
  */
 import { describe, expect, it } from 'vitest';
 
 import type { ActivityDraft } from '../../src/domain/activity-draft';
-import { IMPORTER_ID } from '../../src/wealthfolio/types';
 import { runImport } from '../../src/wealthfolio/import';
 import { buildDuplicateIndex } from '../../src/wealthfolio/duplicate-index';
 import { createFakeHost, foreignSeededActivity, seededActivity } from './fake-host';
@@ -100,28 +97,28 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(result.failedFingerprints).toHaveLength(0);
     expect(result.skippedDuplicates).toBe(0);
     expect(result.fatal).toBeUndefined();
-    expect(host.saveManyCalls).toHaveLength(1);
-    expect(host.saveManyCalls[0].request.creates).toHaveLength(2);
-    expect(host.saveManyCalls[0].request.deleteIds).toBeUndefined();
-    expect(host.saveManyCalls[0].request.updates).toBeUndefined();
+    expect(host.saveManyCalls).toHaveLength(0);
+    expect(host.importCalls).toHaveLength(1);
+    expect(host.importCalls[0]).toHaveLength(2);
+    expect(host.importCalls[0]?.every((activity) => activity.isDraft === false)).toBe(true);
   });
 
-  it('identical second import performs zero saveMany creates', async () => {
+  it('identical second import delegates duplicate detection to the host import workflow', async () => {
     const host = createFakeHost();
     const drafts = [buyDraft(), dividendDraft()];
     const fps = ['fp-buy-1', 'fp-div-1'];
     const rows = [2, 3];
 
     await runImport(host.api, 'acct-1', drafts, fps, rows);
-    expect(host.saveManyCalls).toHaveLength(1);
+    expect(host.importCalls).toHaveLength(1);
 
     const result2 = await runImport(host.api, 'acct-1', drafts, fps, rows);
 
-    expect(result2.attempted).toBe(0);
+    expect(result2.attempted).toBe(2);
     expect(result2.created).toBe(0);
     expect(result2.importedFingerprints).toHaveLength(0);
     expect(result2.skippedDuplicates).toBe(2);
-    expect(host.saveManyCalls).toHaveLength(1);
+    expect(host.importCalls).toHaveLength(2);
   });
 
   it('overlapping import creates only new rows', async () => {
@@ -130,7 +127,7 @@ describe('Revolut adapter: idempotent import flow', () => {
     const firstFps = ['fp-buy-1', 'fp-div-1'];
     const firstRows = [2, 3];
     await runImport(host.api, 'acct-1', firstDrafts, firstFps, firstRows);
-    expect(host.saveManyCalls).toHaveLength(1);
+    expect(host.importCalls).toHaveLength(1);
 
     // Overlapping import: same BUY + a new DEPOSIT.
     const overlap = [buyDraft(), depositDraft()];
@@ -138,16 +135,16 @@ describe('Revolut adapter: idempotent import flow', () => {
     const overlapRows = [2, 4];
     const result2 = await runImport(host.api, 'acct-1', overlap, overlapFps, overlapRows);
 
-    expect(result2.attempted).toBe(1);
+    expect(result2.attempted).toBe(2);
     expect(result2.created).toBe(1);
     expect(result2.skippedDuplicates).toBe(1);
     expect(result2.importedFingerprints).toHaveLength(1);
-    expect(host.saveManyCalls).toHaveLength(2);
-    expect(host.saveManyCalls[1].request.creates).toHaveLength(1);
+    expect(host.importCalls).toHaveLength(2);
+    expect(host.importCalls[1]).toHaveLength(2);
   });
 
-  it('failed saveMany (throw) never marks failed fingerprints as imported', async () => {
-    const host = createFakeHost({ saveManyError: new Error('host down') });
+  it('failed import never marks failed fingerprints as imported', async () => {
+    const host = createFakeHost({ importError: new Error('host down') });
     const drafts = [buyDraft(), dividendDraft()];
     const fps = ['fp-buy-1', 'fp-div-1'];
     const rows = [2, 3];
@@ -164,8 +161,8 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(host.storedActivities).toHaveLength(0);
   });
 
-  it('partial saveMany (errors non-empty) never marks failed fingerprints as imported', async () => {
-    const host = createFakeHost({ saveManyErrorCount: 1 });
+  it('import-time validation failure returns safe diagnostics without a partial write', async () => {
+    const host = createFakeHost({ importValidationErrorCount: 1 });
     const drafts = [buyDraft(), dividendDraft()];
     const fps = ['fp-buy-1', 'fp-div-1'];
     const rows = [2, 3];
@@ -173,11 +170,13 @@ describe('Revolut adapter: idempotent import flow', () => {
     const result = await runImport(host.api, 'acct-1', drafts, fps, rows);
 
     expect(result.attempted).toBe(2);
-    expect(result.created).toBe(1);
-    expect(result.importedFingerprints).toHaveLength(1);
-    expect(result.failedFingerprints).toHaveLength(1);
-    expect(result.fatal).toBeUndefined();
-    expect(host.storedActivities).toHaveLength(1);
+    expect(result.created).toBe(0);
+    expect(result.importedFingerprints).toHaveLength(0);
+    expect(result.failedFingerprints).toHaveLength(2);
+    expect(result.fatal).toBe(
+      'Wealthfolio did not return a complete import outcome. No automatic retry was made.',
+    );
+    expect(host.storedActivities).toHaveLength(0);
     expect(result.failures).toEqual([
       {
         sourceRowNumber: 2,
@@ -186,7 +185,7 @@ describe('Revolut adapter: idempotent import flow', () => {
     ]);
   });
 
-  it('persists the checked asset resolution instead of rebuilding it from the CSV draft', async () => {
+  it('submits the checked asset resolution through the import API', async () => {
     const host = createFakeHost({
       checkImportTransform: (activities) =>
         activities.map((activity) => ({
@@ -204,17 +203,15 @@ describe('Revolut adapter: idempotent import flow', () => {
     const result = await runImport(host.api, 'acct-1', [buyDraft()], ['fp-buy-1'], [2]);
 
     expect(result.created).toBe(1);
-    expect(host.saveManyCalls[0]?.request.creates?.[0]).toMatchObject({
-      id: 'revolut-import:fp-buy-1',
-      asset: {
-        symbol: 'AAPL',
-        exchangeMic: 'XNAS',
-        quoteCcy: 'USD',
-        instrumentType: 'EQUITY',
-        quoteMode: 'MARKET',
-        providerId: 'yahoo',
-        providerSymbol: 'AAPL',
-      },
+    expect(host.importCalls[0]?.[0]).toMatchObject({
+      symbol: 'AAPL',
+      exchangeMic: 'XNAS',
+      quoteCcy: 'USD',
+      instrumentType: 'EQUITY',
+      quoteMode: 'MARKET',
+      providerId: 'yahoo',
+      providerSymbol: 'AAPL',
+      isDraft: false,
     });
   });
 
@@ -238,7 +235,7 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(host.checkImportCalls[0]?.[0]?.symbol).toBe('AAPL');
   });
 
-  it('omits an asset when checkImport normalizes a cash dividend', async () => {
+  it('submits a host-normalized cash dividend unchanged', async () => {
     const host = createFakeHost({
       checkImportTransform: (activities) =>
         activities.map((activity) => ({ ...activity, symbol: '' })),
@@ -247,7 +244,7 @@ describe('Revolut adapter: idempotent import flow', () => {
     const result = await runImport(host.api, 'acct-1', [dividendDraft()], ['fp-div-1'], [2]);
 
     expect(result.created).toBe(1);
-    expect(host.saveManyCalls[0]?.request.creates?.[0]?.asset).toBeUndefined();
+    expect(host.importCalls[0]?.[0]?.symbol).toBe('');
   });
 
   it('fatal checkImport error returns to review and keeps Import disabled', async () => {
@@ -263,7 +260,7 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(result.fatal).toBe(
       'Wealthfolio could not complete this import batch. Re-check the destination account and security mappings, then retry.',
     );
-    expect(host.saveManyCalls).toHaveLength(0);
+    expect(host.importCalls).toHaveLength(0);
   });
 
   it('UNKNOWN activity types are blocked and never sent to the host', async () => {
@@ -277,8 +274,8 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(result.attempted).toBe(1);
     expect(result.created).toBe(1);
     expect(result.blocked).toBe(1);
-    expect(host.saveManyCalls).toHaveLength(1);
-    expect(host.saveManyCalls[0].request.creates).toHaveLength(1);
+    expect(host.importCalls).toHaveLength(1);
+    expect(host.importCalls[0]).toHaveLength(1);
   });
 
   it('each add-on ignores the other importer metadata', async () => {
@@ -308,34 +305,18 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(indexOnlyTheirs.importedFingerprints.has(fp)).toBe(false);
   });
 
-  it('saveMany is always called with { creates } and never deleteIds', async () => {
+  it('uses activities.import and never calls the low-level bulk editor endpoint', async () => {
     const host = createFakeHost();
     await runImport(host.api, 'acct-1', [buyDraft()], ['fp-buy-1'], [2]);
-    expect(host.saveManyCalls).toHaveLength(1);
-    const req = host.saveManyCalls[0].request;
-    expect(Array.isArray(req.creates)).toBe(true);
-    expect(req.deleteIds).toBeUndefined();
-    expect(req.updates).toBeUndefined();
-    expect(Array.isArray(host.saveManyCalls[0].request)).toBe(false);
+    expect(host.importCalls).toHaveLength(1);
+    expect(host.saveManyCalls).toHaveLength(0);
   });
 
-  it('metadata is non-sensitive (no raw rows, balances, filenames, or paths)', async () => {
+  it('does not attach add-on provenance metadata to the host import payload', async () => {
     const host = createFakeHost();
     await runImport(host.api, 'acct-1', [buyDraft()], ['fp-buy-1'], [2]);
 
-    const meta = host.storedActivities[0].metadata as Record<string, unknown> | undefined;
-    expect(meta).toBeDefined();
-    expect(meta?.importerId).toBe(IMPORTER_ID);
-    expect(meta?.sourceFingerprint).toBe('fp-buy-1');
-    expect(meta?.sourceRowNumber).toBe(2);
-    expect(meta?.sourceTicker).toBe('AAPL');
-    // Forbidden fields must never appear.
-    expect(meta?.rawRow).toBeUndefined();
-    expect(meta?.rawRecord).toBeUndefined();
-    expect(meta?.balance).toBeUndefined();
-    expect(meta?.filename).toBeUndefined();
-    expect(meta?.path).toBeUndefined();
-    expect(meta?.statementPath).toBeUndefined();
+    expect(host.importCalls[0]?.[0]).not.toHaveProperty('metadata');
   });
 
   it('prepareDrafts rejects mismatched input lengths', async () => {
