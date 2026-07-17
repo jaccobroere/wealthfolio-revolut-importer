@@ -176,6 +176,51 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(result.failedFingerprints).toHaveLength(1);
     expect(result.fatal).toBeUndefined();
     expect(host.storedActivities).toHaveLength(1);
+    expect(result.failures).toEqual([{ sourceRowNumber: 2, message: 'simulated failure' }]);
+  });
+
+  it('persists the checked asset resolution instead of rebuilding it from the CSV draft', async () => {
+    const host = createFakeHost({
+      checkImportTransform: (activities) =>
+        activities.map((activity) => ({
+          ...activity,
+          symbol: 'AAPL',
+          exchangeMic: 'XNAS',
+          quoteCcy: 'USD',
+          instrumentType: 'EQUITY',
+          quoteMode: 'MARKET',
+          providerId: 'yahoo',
+          providerSymbol: 'AAPL',
+        })),
+    });
+
+    const result = await runImport(host.api, 'acct-1', [buyDraft()], ['fp-buy-1'], [2]);
+
+    expect(result.created).toBe(1);
+    expect(host.saveManyCalls[0]?.request.creates?.[0]).toMatchObject({
+      id: 'revolut-import:fp-buy-1',
+      asset: {
+        symbol: 'AAPL',
+        exchangeMic: 'XNAS',
+        quoteCcy: 'USD',
+        instrumentType: 'EQUITY',
+        quoteMode: 'MARKET',
+        providerId: 'yahoo',
+        providerSymbol: 'AAPL',
+      },
+    });
+  });
+
+  it('omits an asset when checkImport normalizes a cash dividend', async () => {
+    const host = createFakeHost({
+      checkImportTransform: (activities) =>
+        activities.map((activity) => ({ ...activity, symbol: '' })),
+    });
+
+    const result = await runImport(host.api, 'acct-1', [dividendDraft()], ['fp-div-1'], [2]);
+
+    expect(result.created).toBe(1);
+    expect(host.saveManyCalls[0]?.request.creates?.[0]?.asset).toBeUndefined();
   });
 
   it('fatal checkImport error returns to review and keeps Import disabled', async () => {

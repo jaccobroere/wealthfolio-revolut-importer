@@ -112,30 +112,59 @@ export function toActivityImport(prepared: PreparedDraft, accountId: string): Ac
 }
 
 /**
- * Convert an accepted (checkImport-passed) `ActivityImport` row to an
- * `ActivityCreate` for `saveMany({ creates })`.
+ * Convert an accepted `checkImport` row to an `ActivityCreate` for
+ * `saveMany({ creates })`.
  *
- * Decimal strings are preserved. `asset` is set explicitly when a confirmed
- * mapping exists; cash activities omit `asset`. Metadata carries the
- * non-sensitive provenance fingerprint used for duplicate detection.
+ * `checkImport` is not merely a gate in Wealthfolio 3.6.1: it resolves the
+ * quote currency, instrument type, quote mode, and (when already known) asset
+ * id required by the persistence-only `saveMany` path. Rebuilding the asset
+ * from the original CSV draft loses those fields and causes the host to reject
+ * new market-priced assets. The checked row is therefore the source of truth
+ * for both the activity values and its asset resolution.
  */
-export function toActivityCreate(prepared: PreparedDraft, accountId: string): ActivityCreate {
+export function toActivityCreate(
+  prepared: PreparedDraft,
+  checked: ActivityImport,
+  accountId: string,
+  temporaryId: string,
+): ActivityCreate {
   const { draft, fingerprint, sourceRowNumber, asset } = prepared;
-  const isCash = isCashActivity(draft);
-  const meta = buildMetadata(draft, fingerprint, sourceRowNumber, asset);
+  const symbol = checked.symbol?.trim() ?? '';
+  const isCash = symbol.length === 0;
+  const resolvedAsset: AssetResolutionInput | undefined = isCash
+    ? undefined
+    : {
+        id: checked.assetId,
+        symbol,
+        exchangeMic: checked.exchangeMic,
+        name: checked.symbolName,
+        quoteMode:
+          checked.quoteMode === 'MANUAL' || checked.quoteMode === 'MARKET'
+            ? checked.quoteMode
+            : undefined,
+        quoteCcy: checked.quoteCcy,
+        instrumentType: checked.instrumentType,
+        providerId: checked.providerId,
+        providerSymbol: checked.providerSymbol,
+      };
+  const meta = buildMetadata(draft, fingerprint, sourceRowNumber, resolvedAsset ?? asset);
   return {
+    // saveMany uses this only as a temporary correlation id. Wealthfolio
+    // returns it in a row-level error/mapping; it never becomes the activity id.
+    id: temporaryId,
     accountId,
-    activityType: toSdkActivityType(draft.activityType),
-    subtype: toSdkSubtype(draft.subtype),
-    activityDate: draft.date,
-    asset: isCash ? undefined : (asset ?? { symbol: draft.ticker }),
-    quantity: draft.quantity || undefined,
-    unitPrice: draft.unitPrice?.amount || undefined,
-    amount: draft.totalAmount.amount || undefined,
-    currency: draft.currency,
-    fee: undefined,
-    comment: undefined,
-    fxRate: draft.fxRate || undefined,
+    activityType: checked.activityType,
+    subtype: checked.subtype,
+    activityDate: checked.date ?? draft.date,
+    asset: resolvedAsset,
+    quantity: checked.quantity ?? undefined,
+    unitPrice: checked.unitPrice ?? undefined,
+    amount: checked.amount ?? undefined,
+    currency: checked.currency ?? draft.currency,
+    fee: checked.fee ?? undefined,
+    tax: checked.tax ?? undefined,
+    comment: checked.comment ?? undefined,
+    fxRate: checked.fxRate ?? undefined,
     // The released 3.6.1 server's NewActivity DTO receives metadata as a JSON
     // string, then persists it as structured activity metadata.
     metadata: JSON.stringify(meta),

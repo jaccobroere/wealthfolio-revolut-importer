@@ -78,6 +78,8 @@ export interface ImportSummary {
   readonly skippedDuplicates: number;
   readonly blocked: number;
   readonly failed: number;
+  /** Safe, row-level persistence errors from Wealthfolio's bulk API. */
+  readonly failures: readonly { sourceRowNumber?: number; message: string }[];
   readonly fatal?: string;
 }
 

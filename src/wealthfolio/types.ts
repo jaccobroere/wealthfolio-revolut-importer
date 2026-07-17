@@ -69,6 +69,14 @@ export interface PreparedDraft {
   asset?: AssetResolutionInput;
 }
 
+/** A persistence failure reported by Wealthfolio for one draft. */
+export interface ImportFailure {
+  /** Source CSV row number, when the host returned the corresponding temp id. */
+  sourceRowNumber?: number;
+  /** Host-provided, actionable validation message. Never contains a raw CSV row. */
+  message: string;
+}
+
 /** Result of the import flow. */
 export interface ImportFlowResult {
   /** Number of rows sent to `saveMany` as creates. */
@@ -84,6 +92,8 @@ export interface ImportFlowResult {
   /** Rows blocked from import (host validation errors, UNKNOWN type, or
    * unresolved symbols). */
   blocked: number;
+  /** Row-level errors returned by the host bulk-save endpoint. */
+  failures: ImportFailure[];
   /** Fatal host error, when `checkImport` or `saveMany` threw. */
   fatal?: string;
 }

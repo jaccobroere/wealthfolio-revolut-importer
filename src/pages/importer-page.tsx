@@ -162,6 +162,7 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
           skippedDuplicates: result.skippedDuplicates,
           blocked: result.blocked,
           failed: result.failedFingerprints.length,
+          failures: result.failures,
           fatal: result.fatal,
         },
       });

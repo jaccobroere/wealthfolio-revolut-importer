@@ -43,6 +43,22 @@ export function ImportResult({ summary, onReset }: ImportResultProps) {
           not imported.
         </p>
 
+        {summary.failures.length > 0 && (
+          <Alert variant="destructive">
+            <AlertTitle>Activity conversion errors</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc space-y-1 pl-5" data-testid="import-failure-details">
+                {summary.failures.map((failure, index) => (
+                  <li key={`${failure.sourceRowNumber ?? 'batch'}-${index}`}>
+                    {failure.sourceRowNumber ? `Row ${failure.sourceRowNumber}: ` : ''}
+                    {failure.message}
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex justify-end">
           <Button onClick={onReset}>Start a new import</Button>
         </div>
