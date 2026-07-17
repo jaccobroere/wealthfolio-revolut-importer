@@ -93,7 +93,9 @@ export function toActivityImport(prepared: PreparedDraft, accountId: string): Ac
     date: draft.date,
     // Wealthfolio 3.6.1's HTTP ActivityImport DTO requires `symbol` even
     // for cash movements; its import checker accepts the empty cash symbol.
-    symbol: isCash ? '' : draft.ticker,
+    // The selected canonical symbol, not the broker's source label, is what
+    // Wealthfolio uses to resolve the reviewed asset during checkImport.
+    symbol: isCash ? '' : (asset?.symbol ?? draft.ticker),
     quantity: draft.quantity || undefined,
     unitPrice: draft.unitPrice?.amount || undefined,
     amount: draft.totalAmount.amount || undefined,

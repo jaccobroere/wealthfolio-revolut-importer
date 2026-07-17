@@ -53,6 +53,8 @@ export interface FakeHost {
   api: HostAPI;
   /** Recorded `saveMany` calls. */
   saveManyCalls: RecordedSaveMany[];
+  /** Read-only checkImport payloads, in call order. */
+  checkImportCalls: ActivityImport[][];
   /** Activities currently stored (after `saveMany` applies creates). */
   storedActivities: ActivityDetails[];
   /** The last mapping passed to `saveImportMapping`. */
@@ -115,6 +117,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   ];
   const storedActivities: ActivityDetails[] = [...(options.activities ?? [])];
   const saveManyCalls: RecordedSaveMany[] = [];
+  const checkImportCalls: ActivityImport[][] = [];
   let savedMapping: ImportMappingData | undefined;
   let idCounter = 1000;
 
@@ -172,6 +175,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       throw new Error('not used');
     },
     checkImport: async (activities: ActivityImport[]): Promise<ActivityImport[]> => {
+      checkImportCalls.push(activities);
       if (options.checkImportError) throw options.checkImportError;
       // Pass-through: mark all as valid (the adapter re-checks isValid).
       const checked = activities.map((a) => ({ ...a, isValid: a.isValid ?? true }));
@@ -236,7 +240,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
     toast: {} as never,
   } as unknown as HostAPI;
 
-  return { api, saveManyCalls, storedActivities, savedMapping };
+  return { api, saveManyCalls, checkImportCalls, storedActivities, savedMapping };
 }
 
 /** Build a seeded `ActivityDetails` with this importer's metadata. */

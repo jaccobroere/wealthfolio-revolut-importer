@@ -190,10 +190,15 @@ export function reducer(state: ImportState, action: Action): ImportState {
       return { ...state, accounts: action.accounts };
 
     case 'SELECT_ACCOUNT':
-      return { ...state, accountId: action.accountId };
+      return {
+        ...state,
+        accountId: action.accountId,
+        tickers: resetTickerResolutions(state.tickers),
+        acknowledged: false,
+      };
 
     case 'TICKERS_INITIALIZED':
-      return { ...state, tickers: action.tickers };
+      return { ...state, tickers: action.tickers, acknowledged: false };
 
     case 'TICKER_RESOLVED': {
       const existing = state.tickers[action.ticker];
@@ -211,6 +216,7 @@ export function reducer(state: ImportState, action: Action): ImportState {
             },
           },
         },
+        acknowledged: false,
       };
     }
 
@@ -226,6 +232,7 @@ export function reducer(state: ImportState, action: Action): ImportState {
             resolution: action.resolution,
           },
         },
+        acknowledged: false,
       };
     }
 
@@ -265,6 +272,18 @@ export function reducer(state: ImportState, action: Action): ImportState {
 }
 
 // --- Selectors ---------------------------------------------------------------
+
+/** Clear account-scoped mapping results when the destination changes. */
+function resetTickerResolutions(
+  tickers: Readonly<Record<string, TickerEntry>>,
+): Record<string, TickerEntry> {
+  return Object.fromEntries(
+    Object.entries(tickers).map(([ticker, entry]) => [
+      ticker,
+      { ...entry, resolution: { status: 'pending' } },
+    ]),
+  );
+}
 
 /** True when the upload produced a valid header and at least one row. */
 export function hasValidUpload(state: ImportState): boolean {

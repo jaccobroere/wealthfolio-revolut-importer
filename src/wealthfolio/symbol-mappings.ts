@@ -23,6 +23,14 @@ export interface CanonicalIdentity {
   symbol: string;
   exchangeMic?: string;
   providerId?: string;
+  /** Host market-search quote currency, required by asset-linked writes. */
+  quoteCcy?: string;
+  /** Host market-search instrument classification hint. */
+  instrumentType?: string;
+  /** Provider-native code for the explicitly selected market result. */
+  providerSymbol?: string;
+  /** Host asset kind, when the market result supplies one. */
+  kind?: string;
 }
 
 /** Namespaced key for the symbol-mappings sub-table of `ImportMappingData`. */
@@ -49,6 +57,10 @@ export function readSavedMappings(mapping: ImportMappingData): Map<string, Canon
           symbol: parsed.symbol,
           exchangeMic: parsed.exchangeMic,
           providerId: parsed.providerId,
+          quoteCcy: parsed.quoteCcy,
+          instrumentType: parsed.instrumentType,
+          providerSymbol: parsed.providerSymbol,
+          kind: parsed.kind,
         });
       }
     } catch {
@@ -88,6 +100,10 @@ export function resultToIdentity(result: SymbolSearchResult): CanonicalIdentity 
     symbol: result.canonicalSymbol ?? result.symbol,
     exchangeMic: result.canonicalExchangeMic ?? result.exchangeMic,
     providerId: result.providerId,
+    ...(result.currency ? { quoteCcy: result.currency } : {}),
+    ...(result.quoteType ? { instrumentType: result.quoteType } : {}),
+    ...(result.providerSymbol ? { providerSymbol: result.providerSymbol } : {}),
+    ...(result.assetKind ? { kind: result.assetKind } : {}),
   };
 }
 
@@ -100,6 +116,10 @@ export function identityToAsset(identity: CanonicalIdentity): AssetResolutionInp
     symbol: identity.symbol,
     exchangeMic: identity.exchangeMic,
     providerId: identity.providerId,
+    quoteCcy: identity.quoteCcy,
+    instrumentType: identity.instrumentType,
+    providerSymbol: identity.providerSymbol,
+    kind: identity.kind,
   };
 }
 
@@ -141,7 +161,10 @@ export function resolveSymbol(
         );
       });
       if (match) {
-        return { status: 'resolved', identity: savedIdentity, fromSaved: true };
+        // Prefer fresh host metadata while retaining the verified saved
+        // identity. This upgrades older mapping records that predate the
+        // full persistence resolution contract.
+        return { status: 'resolved', identity: resultToIdentity(match), fromSaved: true };
       }
       // Saved identity no longer matches any search result → block (do not
       // silently fall through to auto-select).

@@ -158,7 +158,9 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(result.created).toBe(0);
     expect(result.importedFingerprints).toHaveLength(0);
     expect(result.failedFingerprints).toHaveLength(2);
-    expect(result.fatal).toBe('host down');
+    expect(result.fatal).toBe(
+      'Wealthfolio rejected this activity. Review the destination account and mapping.',
+    );
     expect(host.storedActivities).toHaveLength(0);
   });
 
@@ -176,7 +178,12 @@ describe('Revolut adapter: idempotent import flow', () => {
     expect(result.failedFingerprints).toHaveLength(1);
     expect(result.fatal).toBeUndefined();
     expect(host.storedActivities).toHaveLength(1);
-    expect(result.failures).toEqual([{ sourceRowNumber: 2, message: 'simulated failure' }]);
+    expect(result.failures).toEqual([
+      {
+        sourceRowNumber: 2,
+        message: 'Wealthfolio rejected this activity. Review the destination account and mapping.',
+      },
+    ]);
   });
 
   it('persists the checked asset resolution instead of rebuilding it from the CSV draft', async () => {
@@ -211,6 +218,26 @@ describe('Revolut adapter: idempotent import flow', () => {
     });
   });
 
+  it('passes the selected canonical symbol to checkImport', async () => {
+    const host = createFakeHost();
+
+    await runImport(
+      host.api,
+      'acct-1',
+      [buyDraft({ ticker: 'APPLE-REVOLUT' })],
+      ['fp-buy-1'],
+      [2],
+      async () => ({
+        symbol: 'AAPL',
+        exchangeMic: 'XNAS',
+        quoteCcy: 'USD',
+        instrumentType: 'EQUITY',
+      }),
+    );
+
+    expect(host.checkImportCalls[0]?.[0]?.symbol).toBe('AAPL');
+  });
+
   it('omits an asset when checkImport normalizes a cash dividend', async () => {
     const host = createFakeHost({
       checkImportTransform: (activities) =>
@@ -233,7 +260,9 @@ describe('Revolut adapter: idempotent import flow', () => {
 
     expect(result.attempted).toBe(0);
     expect(result.created).toBe(0);
-    expect(result.fatal).toBe('host validation fatal');
+    expect(result.fatal).toBe(
+      'Wealthfolio rejected this activity. Review the destination account and mapping.',
+    );
     expect(host.saveManyCalls).toHaveLength(0);
   });
 

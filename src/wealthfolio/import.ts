@@ -109,7 +109,7 @@ export async function runImport(
   try {
     checked = await checkImport(api, imports);
   } catch (err) {
-    result.fatal = err instanceof Error ? err.message : String(err);
+    result.fatal = safeHostFailureMessage(err);
     return result;
   }
 
@@ -125,6 +125,10 @@ export async function runImport(
     const checkedRow = checked[i];
     if (!checkedRow?.isValid) {
       result.blocked += 1;
+      result.failures.push({
+        sourceRowNumber: p.sourceRowNumber,
+        message: safeHostFailureMessage(checkedRow?.errors),
+      });
       continue;
     }
     if (index.importedFingerprints.has(p.fingerprint)) {
@@ -151,7 +155,7 @@ export async function runImport(
     mutation = await saveCreates(api, creates);
   } catch (err) {
     // Fatal: no fingerprints are marked imported.
-    result.fatal = err instanceof Error ? err.message : String(err);
+    result.fatal = safeHostFailureMessage(err);
     result.failedFingerprints = accepted.map(({ prepared }) => prepared.fingerprint);
     return result;
   }
@@ -199,7 +203,7 @@ export async function runImport(
   }
   result.failures = mutation.errors.map((error): ImportFailure => ({
     sourceRowNumber: error.id ? rowByTemporaryId.get(error.id) : undefined,
-    message: error.message,
+    message: safeHostFailureMessage(error.message),
   }));
 
   return result;
@@ -207,3 +211,26 @@ export async function runImport(
 
 // Re-export the importer id for callers (e.g. tests).
 export { IMPORTER_ID };
+
+/**
+ * Host messages may contain account ids or source-derived values. Render only
+ * stable, actionable categories in the sandbox UI.
+ */
+function safeHostFailureMessage(error: unknown): string {
+  const text =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : String(error ?? '');
+  if (/quote currency/i.test(text)) {
+    return 'The selected security has no quote currency. Re-select its mapping.';
+  }
+  if (/credit card/i.test(text)) {
+    return 'The selected destination account does not support these activities.';
+  }
+  if (/asset-backed|asset_id|symbol/i.test(text)) {
+    return 'The security mapping is incomplete. Re-select the instrument.';
+  }
+  return 'Wealthfolio rejected this activity. Review the destination account and mapping.';
+}

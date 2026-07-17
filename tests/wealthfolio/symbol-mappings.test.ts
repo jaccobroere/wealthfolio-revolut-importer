@@ -29,6 +29,8 @@ function fakeResult(opts: Partial<SymbolSearchResult>): SymbolSearchResult {
     canonicalExchangeMic: 'XNAS',
     providerId: 'yahoo',
     providerSymbol: 'AAPL',
+    currency: 'USD',
+    assetKind: 'INVESTMENT',
     shortName: 'Apple',
     quoteType: 'EQUITY',
     symbol: 'AAPL',
@@ -52,10 +54,30 @@ function emptyMapping(accountId = 'acct-1'): ImportMappingData {
 
 describe('Revolut adapter: symbol mappings', () => {
   it('reads saved mappings namespaced by importer id', () => {
-    const identity = { symbol: 'AAPL', exchangeMic: 'XNAS', providerId: 'yahoo' };
+    const identity = {
+      symbol: 'AAPL',
+      exchangeMic: 'XNAS',
+      providerId: 'yahoo',
+      quoteCcy: 'USD',
+      instrumentType: 'EQUITY',
+      providerSymbol: 'AAPL',
+      kind: 'INVESTMENT',
+    };
     const mapping = withSavedMapping(emptyMapping(), 'AAPL', identity);
     const read = readSavedMappings(mapping);
     expect(read.get('AAPL')).toEqual(identity);
+  });
+
+  it('retains all persistence fields from the current market result', () => {
+    expect(resultToIdentity(fakeResult({}))).toMatchObject({
+      symbol: 'AAPL',
+      exchangeMic: 'XNAS',
+      providerId: 'yahoo',
+      quoteCcy: 'USD',
+      instrumentType: 'EQUITY',
+      providerSymbol: 'AAPL',
+      kind: 'INVESTMENT',
+    });
   });
 
   it('ignores saved mappings from other importers', () => {
@@ -81,7 +103,8 @@ describe('Revolut adapter: symbol mappings', () => {
     const outcome = resolveSymbol('AAPL', saved, results);
     expect(outcome.status).toBe('resolved');
     if (outcome.status === 'resolved') {
-      expect(outcome.identity).toEqual(identity);
+      expect(outcome.identity).toMatchObject(identity);
+      expect(outcome.identity.quoteCcy).toBe('USD');
       expect(outcome.fromSaved).toBe(true);
     }
   });
