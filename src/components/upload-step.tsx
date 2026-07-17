@@ -10,9 +10,8 @@
  * a privacy-safe summary. On an unknown/changed schema, displays the
  * actionable error from the pure parser.
  */
-import { useRef, useState } from 'react';
-import { Alert, AlertDescription, AlertTitle } from '@wealthfolio/ui';
-import { Card, CardContent, CardHeader, CardTitle } from '@wealthfolio/ui';
+import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { AlertCircle, CheckCircle2, FileText, Upload } from 'lucide-react';
 import { parseRevolutCsv } from '../parser/parse-csv';
 import { validateBatch } from '../validation/validate-batch';
 import type { BatchResult } from '../domain/import-outcome';
@@ -33,6 +32,7 @@ export interface UploadStepProps {
 export function UploadStep({ onComplete, onError, summary, error }: UploadStepProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const handleFile = async (file: File | undefined) => {
@@ -46,7 +46,6 @@ export function UploadStep({ onComplete, onError, summary, error }: UploadStepPr
         const msg = parsed.header.error ?? 'Revolut schema mismatch.';
         setLocalError(msg);
         onError(msg);
-        setBusy(false);
         return;
       }
       const batch = await validateBatch(parsed.rows);
@@ -58,54 +57,122 @@ export function UploadStep({ onComplete, onError, summary, error }: UploadStepPr
       onError(msg);
     } finally {
       setBusy(false);
+      // Let users retry the same file after fixing a schema issue.
+      if (inputRef.current) inputRef.current.value = '';
     }
+  };
+
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    void handleFile(event.target.files?.[0]);
+  };
+
+  const openFilePicker = () => {
+    if (!busy) inputRef.current?.click();
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (!busy) {
+      event.dataTransfer.dropEffect = 'copy';
+      setIsDragging(true);
+    }
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    if (!busy) void handleFile(event.dataTransfer.files?.[0]);
   };
 
   const displayError = localError ?? error ?? null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Step 1 — Upload Revolut CSV</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-muted-foreground text-sm">
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold">Step 1 — Upload Revolut statement</h2>
+        <p id="revolut-upload-description" className="mt-1 text-sm text-muted-foreground">
           Select a Revolut investment statement CSV. The file is parsed locally in your browser;
-          nothing is uploaded. The strict eight-column schema is validated before any row is shown.
+          nothing is uploaded.
         </p>
-        <div className="flex items-center gap-3">
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".csv,text/csv"
-            aria-label="Revolut CSV file"
-            className="text-sm"
-            disabled={busy}
-            onChange={(e) => handleFile(e.target.files?.[0])}
-          />
-          {busy && <span className="text-muted-foreground text-sm">Parsing…</span>}
-        </div>
+      </div>
 
-        {summary && summary.headerOk && (
-          <div className="rounded-md border p-3 text-sm">
-            <div className="font-medium">Parsed successfully</div>
-            <div className="text-muted-foreground mt-1">
-              Rows: {summary.rowCount}
-              {summary.minDate && summary.maxDate
-                ? ` · Date range: ${summary.minDate} to ${summary.maxDate}`
-                : ''}
+      <div
+        className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors sm:p-8 ${
+          busy
+            ? 'cursor-wait border-border bg-muted/20'
+            : isDragging
+              ? 'cursor-copy border-primary bg-primary/5'
+              : 'cursor-pointer border-border hover:border-primary/50 hover:bg-muted/20'
+        }`}
+        role="button"
+        tabIndex={busy ? -1 : 0}
+        aria-label="Select Revolut CSV file"
+        aria-describedby="revolut-upload-description"
+        aria-busy={busy}
+        data-testid="revolut-csv-drop-zone"
+        onClick={openFilePicker}
+        onKeyDown={(event) => {
+          if (!busy && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            openFilePicker();
+          }
+        }}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".csv,text/csv"
+          aria-label="Revolut CSV file"
+          className="sr-only"
+          disabled={busy}
+          onChange={handleInputChange}
+        />
+        <Upload className="mx-auto mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
+        <p className="text-sm font-medium" aria-live="polite">
+          {busy
+            ? 'Parsing CSV…'
+            : isDragging
+              ? 'Drop the CSV file to import it'
+              : 'Drop a CSV file here, or click to browse'}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Revolut investment CSV · 8-column export
+        </p>
+      </div>
+
+      {displayError ? (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium text-destructive">Could not parse this file</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{displayError}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {summary && summary.headerOk && !displayError ? (
+        <div className="flex items-start gap-2 rounded-md border border-success/50 bg-success/10 p-3">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">File parsed successfully</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <FileText className="h-4 w-4" aria-hidden="true" />
+                {summary.rowCount} rows
+              </span>
+              {summary.minDate && summary.maxDate ? (
+                <span>
+                  Date range: {summary.minDate} → {summary.maxDate}
+                </span>
+              ) : null}
             </div>
           </div>
-        )}
-
-        {displayError && (
-          <Alert variant="destructive">
-            <AlertTitle>Could not parse CSV</AlertTitle>
-            <AlertDescription>{displayError}</AlertDescription>
-          </Alert>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

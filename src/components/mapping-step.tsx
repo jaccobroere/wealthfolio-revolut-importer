@@ -24,6 +24,7 @@ import { buildTickerEntries } from '../state/import-state';
 import { AccountSelect } from './account-select';
 import {
   readSavedMappings,
+  resultToIdentity,
   resolveSymbol,
   withSavedMapping,
   type CanonicalIdentity,
@@ -59,6 +60,7 @@ export function MappingStep({
   const [searching, setSearching] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [persistError, setPersistError] = useState<string | null>(null);
+  const [mappingsReady, setMappingsReady] = useState(false);
 
   // Initialize ticker entries once the batch is available.
   useEffect(() => {
@@ -69,8 +71,14 @@ export function MappingStep({
 
   // When an account is selected, load saved mappings for re-verification.
   useEffect(() => {
-    if (!accountId) return;
+    if (!accountId) {
+      setSavedMappings(new Map());
+      setMappingsReady(false);
+      return;
+    }
     let cancelled = false;
+    setSavedMappings(new Map());
+    setMappingsReady(false);
     api.activities
       .getImportMapping(accountId, 'revolut')
       .then((mapping: ImportMappingData) => {
@@ -81,6 +89,9 @@ export function MappingStep({
         if (cancelled) return;
         // Saved mappings are optional; absence is not fatal.
         setSavedMappings(new Map());
+      })
+      .finally(() => {
+        if (!cancelled) setMappingsReady(true);
       });
     return () => {
       cancelled = true;
@@ -91,7 +102,7 @@ export function MappingStep({
   // without a saved mapping, run a search so the user can confirm. The first
   // result is NEVER auto-selected.
   useEffect(() => {
-    if (!accountId) return;
+    if (!accountId || !mappingsReady) return;
     let cancelled = false;
     (async () => {
       for (const entry of Object.values(tickers)) {
@@ -138,7 +149,15 @@ export function MappingStep({
     return () => {
       cancelled = true;
     };
-  }, [accountId, api.market, onTickerResolutionSet, onTickerResolved, savedMappings, tickers]);
+  }, [
+    accountId,
+    api.market,
+    mappingsReady,
+    onTickerResolutionSet,
+    onTickerResolved,
+    savedMappings,
+    tickers,
+  ]);
 
   async function handleResolve(ticker: string, identity: CanonicalIdentity): Promise<void> {
     onTickerResolved(ticker, identity);
@@ -156,7 +175,7 @@ export function MappingStep({
 
   const entries = Object.values(tickers);
   const unresolved = entries.filter((e) => e.resolution.status !== 'resolved');
-  const canContinue = !!accountId && unresolved.length === 0;
+  const canContinue = !!accountId && mappingsReady && unresolved.length === 0;
 
   return (
     <div className="space-y-4">
@@ -201,6 +220,10 @@ export function MappingStep({
               onResolve={(identity) => handleResolve(entry.ticker, identity)}
             />
           ))}
+
+          {!mappingsReady && accountId && (
+            <p className="text-muted-foreground text-sm">Loading account-specific mappings…</p>
+          )}
 
           {searchError && (
             <Alert variant="destructive">
@@ -265,11 +288,7 @@ function TickerRow({ entry, searching, onResolve }: TickerRowProps) {
               : 'Multiple instruments matched. Select the correct one:'}
           </div>
           {resolution.results.map((r, i) => {
-            const identity: CanonicalIdentity = {
-              symbol: r.canonicalSymbol ?? r.symbol,
-              exchangeMic: r.canonicalExchangeMic ?? r.exchangeMic,
-              providerId: r.providerId,
-            };
+            const identity = resultToIdentity(r);
             return (
               <button
                 key={`${r.symbol}-${i}`}

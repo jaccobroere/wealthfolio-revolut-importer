@@ -42,7 +42,7 @@ import type { ActivityDraft } from '../domain/activity-draft';
 import type { BatchResult } from '../domain/import-outcome';
 import { reconcile } from '../reconciliation/reconcile';
 import { runImport } from '../wealthfolio/import';
-import type { CanonicalIdentity } from '../wealthfolio/symbol-mappings';
+import { identityToAsset, type CanonicalIdentity } from '../wealthfolio/symbol-mappings';
 import { UploadStep } from '../components/upload-step';
 import { MappingStep } from '../components/mapping-step';
 import { ReviewStep } from '../components/review-step';
@@ -138,11 +138,7 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
         if (!draft.ticker) return undefined;
         const identity = tickerMap.get(draft.ticker);
         if (!identity) return { symbol: draft.ticker };
-        return {
-          symbol: identity.symbol,
-          exchangeMic: identity.exchangeMic,
-          providerId: identity.providerId,
-        };
+        return identityToAsset(identity);
       };
 
       const result = await runImport(
@@ -162,6 +158,7 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
           skippedDuplicates: result.skippedDuplicates,
           blocked: result.blocked,
           failed: result.failedFingerprints.length,
+          failures: result.failures,
           fatal: result.fatal,
         },
       });

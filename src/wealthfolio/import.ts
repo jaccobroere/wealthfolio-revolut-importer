@@ -21,7 +21,7 @@ import type { ActivityDraft } from '../domain/activity-draft';
 import { buildDuplicateIndex } from './duplicate-index';
 import { toActivityCreate, toActivityImport } from './convert-activity';
 import { getActivities, checkImport, saveCreates } from './api';
-import type { ImportFlowResult, PreparedDraft } from './types';
+import type { ImportFailure, ImportFlowResult, PreparedDraft } from './types';
 import { IMPORTER_ID } from './types';
 
 /**
@@ -93,6 +93,7 @@ export async function runImport(
     failedFingerprints: [],
     skippedDuplicates: 0,
     blocked: 0,
+    failures: [],
   };
 
   // 1. Prepare drafts with fingerprints and assets.
@@ -108,7 +109,7 @@ export async function runImport(
   try {
     checked = await checkImport(api, imports);
   } catch (err) {
-    result.fatal = err instanceof Error ? err.message : String(err);
+    result.fatal = safeHostFailureMessage(err);
     return result;
   }
 
@@ -118,27 +119,34 @@ export async function runImport(
 
   // 4. Partition into new and exact-duplicate. Only rows that passed
   //    checkImport (isValid true) and are not exact duplicates proceed.
-  const acceptedPrepared: PreparedDraft[] = [];
+  const accepted: Array<{ prepared: PreparedDraft; checked: ActivityImport }> = [];
   for (let i = 0; i < validPrepared.length; i++) {
     const p = validPrepared[i];
     const checkedRow = checked[i];
     if (!checkedRow?.isValid) {
       result.blocked += 1;
+      result.failures.push({
+        sourceRowNumber: p.sourceRowNumber,
+        message: safeHostFailureMessage(checkedRow?.errors),
+      });
       continue;
     }
     if (index.importedFingerprints.has(p.fingerprint)) {
       result.skippedDuplicates += 1;
       continue;
     }
-    acceptedPrepared.push(p);
+    accepted.push({ prepared: p, checked: checkedRow });
   }
 
-  if (acceptedPrepared.length === 0) {
+  if (accepted.length === 0) {
     return result;
   }
 
-  // 5. Convert accepted rows to ActivityCreate[].
-  const creates: ActivityCreate[] = acceptedPrepared.map((p) => toActivityCreate(p, accountId));
+  // 5. Convert accepted checked rows to ActivityCreate[]. The checked row
+  // carries the fully resolved asset metadata which saveMany requires.
+  const creates: ActivityCreate[] = accepted.map(({ prepared, checked }) =>
+    toActivityCreate(prepared, checked, accountId, `revolut-import:${prepared.fingerprint}`),
+  );
   result.attempted = creates.length;
 
   // 6. Call saveMany({ creates }). NEVER a bare array.
@@ -147,8 +155,8 @@ export async function runImport(
     mutation = await saveCreates(api, creates);
   } catch (err) {
     // Fatal: no fingerprints are marked imported.
-    result.fatal = err instanceof Error ? err.message : String(err);
-    result.failedFingerprints = acceptedPrepared.map((p) => p.fingerprint);
+    result.fatal = safeHostFailureMessage(err);
+    result.failedFingerprints = accepted.map(({ prepared }) => prepared.fingerprint);
     return result;
   }
 
@@ -170,10 +178,10 @@ export async function runImport(
   if (
     createdFingerprints.length === 0 &&
     mutation.created.length > 0 &&
-    mutation.created.length === acceptedPrepared.length
+    mutation.created.length === accepted.length
   ) {
-    for (let i = 0; i < acceptedPrepared.length; i++) {
-      createdFingerprints.push(acceptedPrepared[i].fingerprint);
+    for (let i = 0; i < accepted.length; i++) {
+      createdFingerprints.push(accepted[i].prepared.fingerprint);
     }
   }
 
@@ -182,12 +190,47 @@ export async function runImport(
 
   // Any attempted fingerprint not in `created` is a failure (partial write).
   const createdSet = new Set(createdFingerprints);
-  for (const p of acceptedPrepared) {
-    if (!createdSet.has(p.fingerprint)) result.failedFingerprints.push(p.fingerprint);
+  for (const { prepared } of accepted) {
+    if (!createdSet.has(prepared.fingerprint)) result.failedFingerprints.push(prepared.fingerprint);
   }
+
+  // The 3.6.1 bulk endpoint identifies preparation errors by the client-supplied
+  // temporary id. Keep the message and source row so a rejected atomic batch is
+  // actionable instead of appearing as an unexplained all-row failure.
+  const rowByTemporaryId = new Map<string, number>();
+  for (let i = 0; i < accepted.length; i++) {
+    rowByTemporaryId.set(creates[i].id ?? '', accepted[i].prepared.sourceRowNumber);
+  }
+  result.failures = mutation.errors.map((error): ImportFailure => ({
+    sourceRowNumber: error.id ? rowByTemporaryId.get(error.id) : undefined,
+    message: safeHostFailureMessage(error.message),
+  }));
 
   return result;
 }
 
 // Re-export the importer id for callers (e.g. tests).
 export { IMPORTER_ID };
+
+/**
+ * Host messages may contain account ids or source-derived values. Render only
+ * stable, actionable categories in the sandbox UI.
+ */
+function safeHostFailureMessage(error: unknown): string {
+  const text =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : String(error ?? '');
+  if (/quote currency/i.test(text)) {
+    return 'The selected security has no quote currency. Re-select its mapping.';
+  }
+  if (/credit card/i.test(text)) {
+    return 'The selected destination account does not support these activities.';
+  }
+  if (/asset-backed|asset_id|symbol/i.test(text)) {
+    return 'The security mapping is incomplete. Re-select the instrument.';
+  }
+  return 'Wealthfolio rejected this activity. Review the destination account and mapping.';
+}

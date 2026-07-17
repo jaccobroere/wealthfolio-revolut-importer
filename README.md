@@ -45,7 +45,9 @@ See the complete [installation guide](docs/INSTALL.md).
 
 Mappings are scoped to the selected Wealthfolio account. Repeating the same
 import, or importing overlapping date ranges, is protected by stable row
-fingerprints and import checks.
+fingerprints and import checks. Changing the account or a mapping requires a
+new reconciliation acknowledgement. If Wealthfolio rejects a draft, the
+importer shows safe row-level diagnostics without exposing statement data.
 
 ## Supported CSV content
 
