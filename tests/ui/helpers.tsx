@@ -157,7 +157,13 @@ export async function renderPageToReconcile(hostOptions: FakeHostOptions = {}) {
 
   await screen.findByTestId('mapping-continue');
 
-  fireEvent.change(await screen.findByLabelText('Destination account'), {
+  const accountSelect = await screen.findByLabelText('Destination account');
+  await waitFor(() => {
+    if ((accountSelect as HTMLSelectElement).disabled) {
+      throw new Error('Destination account select is still loading');
+    }
+  });
+  fireEvent.change(accountSelect, {
     target: { value: 'acct-1' },
   });
   fireEvent.click(await screen.findByTestId('ticker-candidate-AAPL-0'));

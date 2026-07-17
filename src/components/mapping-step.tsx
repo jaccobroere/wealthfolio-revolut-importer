@@ -27,8 +27,10 @@ import {
   resultToIdentity,
   resolveSymbol,
   withSavedMapping,
+  withoutSavedMapping,
   type CanonicalIdentity,
 } from '../wealthfolio/symbol-mappings';
+import { IMPORTER_ID } from '../wealthfolio/types';
 
 export interface MappingStepProps {
   api: HostAPI;
@@ -39,9 +41,10 @@ export interface MappingStepProps {
   tickers: Readonly<Record<string, TickerEntry>>;
   onSelectAccount: (accountId: string) => void;
   onTickersInitialized: (tickers: Readonly<Record<string, TickerEntry>>) => void;
-  onTickerResolved: (ticker: string, identity: CanonicalIdentity) => void;
+  onTickerResolved: (ticker: string, identity: CanonicalIdentity, fromSaved?: boolean) => void;
   onTickerResolutionSet: (ticker: string, resolution: TickerResolution) => void;
   onContinue: () => void;
+  onBack: () => void;
 }
 
 export function MappingStep({
@@ -55,6 +58,7 @@ export function MappingStep({
   onTickerResolved,
   onTickerResolutionSet,
   onContinue,
+  onBack,
 }: MappingStepProps) {
   const [savedMappings, setSavedMappings] = useState<Map<string, CanonicalIdentity>>(new Map());
   const [searching, setSearching] = useState<string | null>(null);
@@ -80,7 +84,7 @@ export function MappingStep({
     setSavedMappings(new Map());
     setMappingsReady(false);
     api.activities
-      .getImportMapping(accountId, 'revolut')
+      .getImportMapping(accountId, IMPORTER_ID)
       .then((mapping: ImportMappingData) => {
         if (cancelled) return;
         setSavedMappings(readSavedMappings(mapping));
@@ -115,7 +119,7 @@ export function MappingStep({
           const outcome = resolveSymbol(entry.ticker, savedMappings, results);
           if (outcome.status === 'resolved') {
             if (outcome.fromSaved) {
-              onTickerResolved(entry.ticker, outcome.identity);
+              onTickerResolved(entry.ticker, outcome.identity, true);
             } else {
               onTickerResolutionSet(entry.ticker, {
                 status: 'candidates',
@@ -134,13 +138,13 @@ export function MappingStep({
           }
           if (outcome.status === 'blocked') {
             onTickerResolutionSet(entry.ticker, {
-              status: 'blocked',
-              reason: outcome.reason,
+              status: 'stale',
+              results,
             });
           }
-        } catch (err) {
+        } catch {
           if (cancelled) return;
-          setSearchError(err instanceof Error ? err.message : String(err));
+          setSearchError('Wealthfolio could not search this ticker. Try again before importing.');
         } finally {
           if (!cancelled) setSearching(null);
         }
@@ -164,12 +168,55 @@ export function MappingStep({
     if (!accountId) return;
     setPersistError(null);
     try {
-      const current = await api.activities.getImportMapping(accountId, 'revolut');
+      const current = await api.activities.getImportMapping(accountId, IMPORTER_ID);
       const updated = withSavedMapping(current, ticker, identity);
       await api.activities.saveImportMapping(updated);
       setSavedMappings(readSavedMappings(updated));
-    } catch (error) {
-      setPersistError(error instanceof Error ? error.message : String(error));
+    } catch {
+      setPersistError('Wealthfolio could not save this mapping. You can retry the selection.');
+    }
+  }
+
+  async function handleForget(ticker: string, results: SymbolSearchResult[]): Promise<void> {
+    if (!accountId) return;
+    setPersistError(null);
+    try {
+      const current = await api.activities.getImportMapping(accountId, IMPORTER_ID);
+      const updated = withoutSavedMapping(current, ticker);
+      await api.activities.saveImportMapping(updated);
+      setSavedMappings(readSavedMappings(updated));
+      onTickerResolutionSet(
+        ticker,
+        results.length > 0 ? { status: 'candidates', results } : { status: 'no-results' },
+      );
+    } catch {
+      setPersistError('Wealthfolio could not remove the remembered mapping. Try again.');
+    }
+  }
+
+  async function handleRetrySearch(ticker: string): Promise<void> {
+    if (!accountId || searching) return;
+    setSearchError(null);
+    setSearching(ticker);
+    try {
+      const results = await api.market.searchTicker(ticker);
+      const outcome = resolveSymbol(ticker, savedMappings, results);
+      if (outcome.status === 'resolved' && outcome.fromSaved) {
+        onTickerResolved(ticker, outcome.identity, true);
+      } else if (outcome.status === 'resolved' || outcome.status === 'ambiguous') {
+        onTickerResolutionSet(ticker, {
+          status: 'candidates',
+          results: outcome.status === 'resolved' ? results : outcome.results,
+        });
+      } else if (outcome.status === 'no-results') {
+        onTickerResolutionSet(ticker, { status: 'no-results' });
+      } else {
+        onTickerResolutionSet(ticker, { status: 'stale', results });
+      }
+    } catch {
+      setSearchError('Wealthfolio could not search this ticker. Try again before importing.');
+    } finally {
+      setSearching(null);
     }
   }
 
@@ -218,6 +265,12 @@ export function MappingStep({
               entry={entry}
               searching={searching === entry.ticker}
               onResolve={(identity) => handleResolve(entry.ticker, identity)}
+              onForget={() =>
+                entry.resolution.status === 'stale'
+                  ? handleForget(entry.ticker, entry.resolution.results)
+                  : undefined
+              }
+              onRetry={() => handleRetrySearch(entry.ticker)}
             />
           ))}
 
@@ -241,7 +294,10 @@ export function MappingStep({
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <Button variant="ghost" onClick={onBack} data-testid="mapping-back">
+          Start over
+        </Button>
         <Button disabled={!canContinue} onClick={onContinue} data-testid="mapping-continue">
           Continue to review
         </Button>
@@ -254,9 +310,11 @@ interface TickerRowProps {
   entry: TickerEntry;
   searching: boolean;
   onResolve: (identity: CanonicalIdentity) => Promise<void> | void;
+  onForget: () => Promise<void> | void;
+  onRetry: () => Promise<void> | void;
 }
 
-function TickerRow({ entry, searching, onResolve }: TickerRowProps) {
+function TickerRow({ entry, searching, onResolve, onForget, onRetry }: TickerRowProps) {
   const { resolution } = entry;
   return (
     <div className="rounded-md border p-3">
@@ -308,18 +366,69 @@ function TickerRow({ entry, searching, onResolve }: TickerRowProps) {
         </div>
       )}
 
+      {resolution.status === 'stale' && (
+        <div className="mt-2 space-y-2">
+          <p className="text-sm text-destructive">
+            The remembered mapping for this account no longer matches Wealthfolio’s current results.
+            Select a replacement below, or remove the remembered mapping.
+          </p>
+          {resolution.results.map((r, i) => {
+            const identity = resultToIdentity(r);
+            return (
+              <button
+                key={`${r.symbol}-${i}`}
+                type="button"
+                className="block w-full rounded-md border px-3 py-2 text-left text-sm hover:bg-accent"
+                onClick={() => onResolve(identity)}
+                data-testid={`ticker-candidate-${entry.ticker}-${i}`}
+              >
+                <span className="font-medium">{identity.symbol}</span>
+                {identity.exchangeMic ? ` · ${identity.exchangeMic}` : ''}
+                {r.exchangeName ? ` · ${r.exchangeName}` : ''}
+                {r.currency ? ` · ${r.currency}` : ''}
+                {r.shortName ? ` — ${r.shortName}` : ''}
+              </button>
+            );
+          })}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void onForget()}
+            disabled={searching}
+            data-testid={`forget-saved-mapping-${entry.ticker}`}
+          >
+            Remove remembered mapping
+          </Button>
+        </div>
+      )}
+
       {resolution.status === 'no-results' && (
-        <div className="text-destructive mt-2 text-sm">
-          No instruments found for “{entry.ticker}”. This ticker must be resolved before import.
+        <div className="mt-2 space-y-2">
+          <p className="text-destructive text-sm">
+            No instruments found for “{entry.ticker}”. This ticker must be resolved before import.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void onRetry()} disabled={searching}>
+            Search again
+          </Button>
         </div>
       )}
 
       {resolution.status === 'blocked' && (
-        <div className="text-destructive mt-2 text-sm">{resolution.reason}</div>
+        <div className="mt-2 space-y-2">
+          <p className="text-destructive text-sm">{resolution.reason}</p>
+          <Button variant="outline" size="sm" onClick={() => void onRetry()} disabled={searching}>
+            Search again
+          </Button>
+        </div>
       )}
 
       {resolution.status === 'pending' && !searching && (
-        <div className="text-muted-foreground mt-2 text-sm">Searching…</div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <p className="text-muted-foreground text-sm">Ready to search for a current mapping.</p>
+          <Button variant="outline" size="sm" onClick={() => void onRetry()}>
+            Search now
+          </Button>
+        </div>
       )}
       {searching && <div className="text-muted-foreground mt-2 text-sm">Searching…</div>}
     </div>
@@ -331,6 +440,7 @@ function ResolutionBadge({ status }: { status: TickerEntry['resolution']['status
     pending: { label: 'Pending', className: 'bg-muted text-muted-foreground' },
     resolved: { label: 'Resolved', className: 'bg-emerald-100 text-emerald-800' },
     candidates: { label: 'Review required', className: 'bg-amber-100 text-amber-800' },
+    stale: { label: 'Update mapping', className: 'bg-amber-100 text-amber-800' },
     'no-results': { label: 'No results', className: 'bg-red-100 text-red-800' },
     blocked: { label: 'Blocked', className: 'bg-red-100 text-red-800' },
   };

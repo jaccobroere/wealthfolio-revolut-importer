@@ -48,6 +48,9 @@ import, or importing overlapping date ranges, is protected by stable row
 fingerprints and import checks. Changing the account or a mapping requires a
 new reconciliation acknowledgement. If Wealthfolio rejects a draft, the
 importer shows safe row-level diagnostics without exposing statement data.
+If Wealthfolio no longer recognizes a remembered mapping, the mapping step
+shows its current choices so you can replace or remove the stale mapping; it
+never leaves the import blocked without a recovery action.
 
 ## Supported CSV content
 

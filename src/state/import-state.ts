@@ -44,6 +44,8 @@ export type TickerResolution =
   | { status: 'pending' }
   | { status: 'no-results' }
   | { status: 'candidates'; results: SymbolSearchResult[] }
+  /** A remembered account mapping is stale; current choices are reviewable. */
+  | { status: 'stale'; results: SymbolSearchResult[] }
   | { status: 'blocked'; reason: string }
   | { status: 'resolved'; identity: CanonicalIdentity; fromSaved: boolean };
 
@@ -145,6 +147,7 @@ export type Action =
       type: 'TICKER_RESOLVED';
       ticker: string;
       identity: CanonicalIdentity;
+      fromSaved?: boolean;
     }
   | {
       type: 'TICKER_RESOLUTION_SET';
@@ -212,7 +215,7 @@ export function reducer(state: ImportState, action: Action): ImportState {
             resolution: {
               status: 'resolved',
               identity: action.identity,
-              fromSaved: false,
+              fromSaved: action.fromSaved ?? false,
             },
           },
         },
