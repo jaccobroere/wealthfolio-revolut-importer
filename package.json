@@ -1,6 +1,6 @@
 {
   "name": "wealthfolio-revolut-importer",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "description": "Import Revolut investment CSV statements into Wealthfolio",
   "engines": {
@@ -42,7 +42,6 @@
     "package:addon": "sh scripts/package-addon.sh",
     "validate:package": "tsx scripts/validate-package.ts",
     "privacy:scan": "sh scripts/privacy-scan.sh",
-    "release:attestation": "tsx scripts/write-release-attestation.ts",
     "integration:revolut": "playwright test",
     "verify": "pnpm format && pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm check:fixtures && pnpm privacy:scan && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
     "verify:release": "sh scripts/verify-release.sh"
