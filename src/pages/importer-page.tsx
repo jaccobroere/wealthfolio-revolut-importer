@@ -7,7 +7,7 @@
  * React state/effects + direct `ctx.api` calls — no QueryClient provider, no
  * router hooks. The pure core (parser, validation, reconciliation) is
  * invoked here; the Wealthfolio adapter is invoked only at the final import
- * step (read-only `checkImport` gate → `saveMany({ creates })`).
+ * step (read-only `checkImport` gate → `import(checkedActivities)`).
  *
  * Privacy: the UI never displays raw rows, balances, or order ids by
  * default. Review shows source row number/type + normalized values.

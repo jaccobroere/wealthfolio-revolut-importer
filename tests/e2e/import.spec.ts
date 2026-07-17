@@ -44,7 +44,7 @@ test.describe.serial('installed Revolut package lifecycle', () => {
     await expect(page.locator('[data-addon-id="revolut-importer"]')).toHaveCount(1);
   });
 
-  test('checks synthetic imports before saving, persists metadata, and is duplicate safe', async ({
+  test('checks synthetic imports before committing them through the host import workflow', async ({
     page,
   }) => {
     await signIn(page);
@@ -64,14 +64,14 @@ test.describe.serial('installed Revolut package lifecycle', () => {
     await expect(addonFrame(page).getByTestId('import-summary-created')).toHaveText(/Created\s*2/);
 
     // Released 3.6.1 performs read-only validation, activity search/getAll,
-    // then bulk persistence in that order.
+    // then import-specific persistence in that order.
     expect(activityPosts).toHaveLength(3);
     expect(activityPosts[0]).toMatch(/activities\/import\/check$/);
     expect(activityPosts[1]).toMatch(/activities\/search$/);
-    expect(activityPosts[2]).toMatch(/activities\/bulk$/);
+    expect(activityPosts[2]).toMatch(/activities\/import$/);
 
-    // Direct host activity search/getAll evidence: metadata survives the write
-    // and is returned by the host's activity search API.
+    // Direct host activity search/getAll evidence: the imported cash movements
+    // are available to the selected destination account.
     const activitySearch = page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' && response.url().endsWith('/activities/search'),
@@ -81,17 +81,9 @@ test.describe.serial('installed Revolut package lifecycle', () => {
       data: Array<{
         activityType: 'DEPOSIT' | 'WITHDRAWAL';
         amount: string;
-        metadata?: Record<string, unknown>;
       }>;
     };
     expect(searchedActivities.data).toHaveLength(2);
-    expect(searchedActivities.data).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          metadata: expect.objectContaining({ importerId: 'revolut-importer' }),
-        }),
-      ]),
-    );
     const cashNet = searchedActivities.data.reduce(
       (total, activity) =>
         activity.activityType === 'WITHDRAWAL'
