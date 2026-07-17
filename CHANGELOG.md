@@ -5,6 +5,13 @@ notes live under [`docs/releases/`](docs/releases/).
 
 ## Unreleased
 
+## 0.2.3
+
+- Added native drag-and-drop CSV upload feedback and corrected account-scoped
+  activity conversion and mapping persistence.
+- Removed the release self-attestation artifact; release publication now relies
+  on reproducible public validation and package checks.
+
 ## 0.2.2
 
 - Restored the runtime sidebar entry and `/addon/revolut-importer` route
