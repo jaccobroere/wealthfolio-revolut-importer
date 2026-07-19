@@ -53,6 +53,19 @@ jobs:
       - name: Run synthetic verification and privacy/history gate
         run: pnpm verify
 
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start disposable Wealthfolio host
+        run: pnpm integration:up
+
+      - name: Run disposable-host E2E gate
+        run: pnpm integration:revolut
+
+      - name: Remove disposable Wealthfolio host
+        if: always()
+        run: pnpm integration:down
+
       - name: Build twice and validate deterministic release
         shell: bash
         run: |

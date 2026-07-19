@@ -13,14 +13,13 @@ wealthfolio/wealthfolio:3.6.1@sha256:2819715df7057a46a29f30cd3c3e713df3bbe424b3a
 ## Run
 
 ```sh
-cp tests/integration/.env.example tests/integration/.env
-shasum -a 256 -c artifacts/SHA256SUMS
-docker compose --env-file tests/integration/.env -f tests/integration/compose.yml up -d
+pnpm integration:up
 pnpm integration:revolut
 ```
 
-The integration suite installs only
-`artifacts/wealthfolio-revolut-importer-0.1.0.zip`; it never loads `dist/`.
+The integration suite installs only the SHA256SUMS-validated archive named by
+the current `package.json`; it never loads `dist/`. CI performs this same
+package proof and uploads committed masked fixtures through the real add-on UI.
 Set `REVOLUT_ACCEPTANCE_CSV` to an absolute local path only when running the
 real-statement parse-only test. The statement is uploaded to the disposable
 host, is never copied into this repository, and is never persisted through the
@@ -38,7 +37,7 @@ detection and import-run bookkeeping; the add-on never calls the lower-level
 Always destroy only this harness's project and named volume:
 
 ```sh
-docker compose --env-file tests/integration/.env -f tests/integration/compose.yml down --volumes --remove-orphans
+pnpm integration:down
 ```
 
 Do not connect this compose file to external networks, database/proxy services,

@@ -6,10 +6,13 @@ import {
   createSyntheticAccount,
   e2eInvalidStatement,
   e2eOverlapStatement,
+  e2ePortfolioStatement,
   installPackagedAddon,
+  portfolioAccountName,
   signIn,
   signInAndOnboard,
   uploadCashStatementToConfirmation,
+  uploadPortfolioToConfirmation,
 } from './helpers';
 
 test.describe.serial('installed Revolut package lifecycle', () => {
@@ -151,6 +154,108 @@ test.describe.serial('installed Revolut package lifecycle', () => {
     await expect(addonFrame(page).getByTestId('import-summary-created')).toHaveText(/Created\s*1/);
     await expect(addonFrame(page).getByTestId('import-summary-skipped-duplicates')).toHaveText(
       /Skipped duplicates\s*2/,
+    );
+  });
+
+  test('imports the masked USD portfolio through live mapping, host check, persistence, and duplicate detection', async ({
+    page,
+  }) => {
+    let checkedActivities: Array<Record<string, unknown>> | undefined;
+    let importedActivities: Array<Record<string, unknown>> | undefined;
+    page.on('response', (response) => {
+      const pathname = new URL(response.url()).pathname;
+      if (response.request().method() !== 'POST' || !pathname.startsWith('/api/v1/activities/')) {
+        return;
+      }
+      if (pathname === '/api/v1/activities/import/check') {
+        void response.json().then((body: unknown) => {
+          if (Array.isArray(body)) checkedActivities = body as Array<Record<string, unknown>>;
+        });
+      }
+      if (pathname === '/api/v1/activities/import') {
+        const body = JSON.parse(response.request().postData() ?? '{}') as {
+          activities?: Array<Record<string, unknown>>;
+        };
+        importedActivities = body.activities;
+      }
+    });
+
+    await signIn(page);
+    await createSyntheticAccount(page, portfolioAccountName, 'USD');
+    await uploadPortfolioToConfirmation(page);
+    await addonFrame(page)
+      .getByRole('button', { name: /^Import/ })
+      .click();
+    await expect(addonFrame(page).getByTestId('import-summary-created')).toHaveText(
+      /Created\s*[1-9]/,
+    );
+    await expect.poll(() => checkedActivities).toBeDefined();
+    await expect.poll(() => importedActivities).toBeDefined();
+
+    const checkedInstrument = checkedActivities?.find((activity) => activity.symbol !== '');
+    expect(checkedInstrument).toEqual(
+      expect.objectContaining({
+        isValid: true,
+        quoteCcy: 'USD',
+        instrumentType: expect.any(String),
+      }),
+    );
+    const importedInstrument = importedActivities?.find((activity) => activity.symbol !== '');
+    expect(importedInstrument).toEqual(
+      expect.objectContaining({
+        isDraft: false,
+        exchangeMic: expect.any(String),
+        providerId: expect.any(String),
+      }),
+    );
+
+    const persisted = await page.evaluate(async (name) => {
+      const accounts = (await fetch('/api/v1/accounts').then((response) =>
+        response.json(),
+      )) as Array<{ id: string; name: string }>;
+      const account = accounts.find((candidate) => candidate.name === name);
+      if (!account) throw new Error('Disposable USD portfolio account is missing');
+      const response = await fetch('/api/v1/activities/search', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          page: 0,
+          pageSize: Number.MAX_SAFE_INTEGER,
+          accountIdFilter: [account.id],
+          sort: { id: 'date', desc: true },
+        }),
+      });
+      const payload = (await response.json()) as {
+        data?: Array<{ activityType?: string; assetId?: string | null }>;
+      };
+      const activities = payload.data ?? [];
+      return {
+        status: response.status,
+        count: activities.length,
+        types: activities.map((activity) => activity.activityType).sort(),
+        assetBacked: activities.filter((activity) => Boolean(activity.assetId)).length,
+      };
+    }, portfolioAccountName);
+    expect(persisted.status).toBe(200);
+    expect(persisted.count).toBe(importedActivities?.length);
+    expect(persisted.types).toEqual(expect.arrayContaining(['BUY', 'SELL', 'DIVIDEND']));
+    expect(persisted.assetBacked).toBeGreaterThanOrEqual(4);
+
+    await page.goto('/addon/revolut-importer');
+    const addon = addonFrame(page);
+    await addon.getByLabel('Revolut CSV file').setInputFiles(e2ePortfolioStatement);
+    await addon
+      .getByLabel('Destination account')
+      .selectOption({ label: `${portfolioAccountName} (USD)` });
+    await expect(addon.getByTestId('mapping-continue')).toBeEnabled();
+    await addon.getByTestId('mapping-continue').click();
+    await addon.getByTestId('review-continue').click();
+    await addon.getByRole('checkbox').check();
+    await addon.getByRole('button', { name: /^Import/ }).click();
+    await expect(addon.getByTestId('import-summary-created')).toHaveText(/Created\s*0/);
+    await expect(addon.getByTestId('import-summary-skipped-duplicates')).toHaveText(
+      /Skipped duplicates\s*[1-9]/,
     );
   });
 

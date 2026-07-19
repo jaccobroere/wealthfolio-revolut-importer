@@ -1,6 +1,6 @@
 {
   "name": "wealthfolio-revolut-importer",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "type": "module",
   "description": "Import Revolut investment CSV statements into Wealthfolio",
   "engines": {
@@ -42,6 +42,8 @@
     "package:addon": "sh scripts/package-addon.sh",
     "validate:package": "tsx scripts/validate-package.ts",
     "privacy:scan": "sh scripts/privacy-scan.sh",
+    "integration:up": "docker compose --project-name wf-revolut-addon-test -f tests/integration/compose.yml up --detach --wait",
+    "integration:down": "docker compose --project-name wf-revolut-addon-test -f tests/integration/compose.yml down --volumes --remove-orphans",
     "integration:revolut": "playwright test",
     "verify": "pnpm format && pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm check:fixtures && pnpm privacy:scan && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
     "verify:release": "sh scripts/verify-release.sh"
