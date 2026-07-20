@@ -64,3 +64,25 @@ describe('golden: revolut-all-supported-types fixture', () => {
     expect(r.collisions.length).toBe(0);
   });
 });
+
+describe('golden: masked E2E portfolio fixture', () => {
+  const parsed = parseRevolutCsv(fixture('revolut-e2e-portfolio.csv'));
+
+  it('keeps the broker schema and all portfolio rows valid', async () => {
+    expect(parsed.header.ok).toBe(true);
+    const validated = await validateBatch(parsed.rows);
+    expect(validated.counts).toEqual({ total: 8, imported: 8, unknown: 0, invalid: 0 });
+    expect(validated.collisions).toEqual([]);
+  });
+
+  it('covers cash, instrument, dividend, and credit activity families', async () => {
+    const validated = await validateBatch(parsed.rows);
+    const types = validated.outcomes.flatMap((outcome) =>
+      outcome.draft ? [outcome.draft.activityType] : [],
+    );
+    expect(types).toEqual(
+      expect.arrayContaining(['BUY', 'SELL', 'DIVIDEND', 'DEPOSIT', 'WITHDRAWAL', 'CREDIT']),
+    );
+    expect(reconcile(validated.outcomes)).toMatchObject({ accountedRows: 8, totalRows: 8 });
+  });
+});

@@ -1,6 +1,6 @@
 {
   "name": "wealthfolio-revolut-importer",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "type": "module",
   "description": "Import Revolut investment CSV statements into Wealthfolio",
   "engines": {
@@ -27,8 +27,6 @@
     "dev": "vite build --watch",
     "dev:server": "wealthfolio dev",
     "clean": "rm -rf dist",
-    "prepare": "simple-git-hooks",
-    "precommit": "lint-staged",
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --check .",
@@ -41,10 +39,12 @@
     "validate:manifest": "tsx scripts/validate-manifest.ts",
     "package:addon": "sh scripts/package-addon.sh",
     "validate:package": "tsx scripts/validate-package.ts",
-    "privacy:scan": "sh scripts/privacy-scan.sh",
-    "integration:revolut": "playwright test",
-    "verify": "pnpm format && pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm check:fixtures && pnpm privacy:scan && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
-    "verify:release": "sh scripts/verify-release.sh"
+    "integration:up": "docker compose --project-name wf-revolut-addon-test -f tests/integration/compose.yml up --detach --wait",
+    "integration:down": "docker compose --project-name wf-revolut-addon-test -f tests/integration/compose.yml down --volumes --remove-orphans",
+    "check": "pnpm format:check && pnpm lint && pnpm type-check && pnpm test && pnpm check:fixtures && pnpm build && pnpm validate:manifest",
+    "package": "pnpm build && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
+    "test:host": "pnpm package && playwright test -c playwright.config.ts",
+    "release:check": "sh scripts/release-check.sh"
   },
   "dependencies": {
     "decimal.js": "10.6.0",
@@ -80,31 +80,17 @@
     "eslint": "^10.7.0",
     "fast-check": "^4.9.0",
     "jsdom": "^29.1.1",
-    "lint-staged": "^17.0.8",
     "lucide-react": "^1.24.0",
     "papaparse": "5.5.4",
     "prettier": "^3.9.5",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "recharts": "^3.9.2",
-    "simple-git-hooks": "^2.13.1",
     "tailwindcss": "^4.3.2",
     "tsx": "^4.23.1",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.64.0",
     "vite": "^8.1.4",
     "vitest": "^4.1.10"
-  },
-  "lint-staged": {
-    "*.{js,jsx,ts,tsx}": [
-      "prettier --write",
-      "eslint --fix"
-    ],
-    "*.{css,json,md,yaml,yml}": [
-      "prettier --write"
-    ]
-  },
-  "simple-git-hooks": {
-    "pre-commit": "pnpm exec lint-staged"
   }
 }

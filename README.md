@@ -97,9 +97,9 @@ guarantees.
 
 ```sh
 pnpm install
-pnpm verify
+pnpm check
 ```
 
 Public verification uses synthetic fixtures. Real-statement acceptance is a
-separate local-only gate. See [CONTRIBUTING.md](CONTRIBUTING.md) and the
+separate local-only release gate. See [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [development guide](docs/DEVELOPMENT.md).

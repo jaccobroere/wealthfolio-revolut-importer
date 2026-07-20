@@ -9,7 +9,7 @@ Based on the official `@wealthfolio/addon-dev-tools@3.6.1` template.
 
 ## Toolchain
 
-- Node `20.19.0` (`.nvmrc`), pnpm `10.34.5` (`packageManager`).
+- Node `22` (`.nvmrc`), pnpm `10.34.5` (`packageManager`).
 - Use `pnpm`, never npm. The lockfile is frozen and committed.
 - `pnpm type-check`, `pnpm test`, `pnpm build`, `pnpm lint`, `pnpm format`.
 
