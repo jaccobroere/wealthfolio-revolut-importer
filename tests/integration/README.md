@@ -1,44 +1,22 @@
-# Disposable Wealthfolio 3.6.1 host proof
+# Disposable Wealthfolio host
 
-This harness is exclusively for the Revolut add-on's local integration gate. It creates
-the Compose project `wf-revolut-addon-test`, uses only the named volume
-`wf-revolut-addon-test-data`, and binds the host on loopback only.
+The host smoke test uses a pinned Wealthfolio 3.6.1 image, a loopback-only
+port, and one disposable named volume. It has no production credentials,
+network, or storage.
 
-It must use this exact immutable host image:
+Run it with:
 
+```sh
+pnpm test:host
 ```
-wealthfolio/wealthfolio:3.6.1@sha256:2819715df7057a46a29f30cd3c3e713df3bbe424b3a1bf7f2c92dc1dea1f84a6
-```
 
-## Run
+The command builds and validates the release ZIP, starts a clean host, imports
+one synthetic cash CSV, then verifies a repeat import creates no activities.
+It cleans up the host and volume automatically.
+
+For host debugging only, the underlying commands remain available:
 
 ```sh
 pnpm integration:up
-pnpm integration:revolut
-```
-
-The integration suite installs only the SHA256SUMS-validated archive named by
-the current `package.json`; it never loads `dist/`. CI performs this same
-package proof and uploads committed masked fixtures through the real add-on UI.
-Set `REVOLUT_ACCEPTANCE_CSV` to an absolute local path only when running the
-real-statement parse-only test. The statement is uploaded to the disposable
-host, is never copied into this repository, and is never persisted through the
-import confirmation step.
-
-## Atomicity regression
-
-`tests/e2e/import.spec.ts` exercises the packaged add-on's normal
-`checkImport` then `import` flow. The host owns import-specific duplicate
-detection and import-run bookkeeping; the add-on never calls the lower-level
-`activities/bulk` editor endpoint for a broker statement.
-
-## Teardown
-
-Always destroy only this harness's project and named volume:
-
-```sh
 pnpm integration:down
 ```
-
-Do not connect this compose file to external networks, database/proxy services,
-or any production resource. The suite uses a synthetic account and credentials.

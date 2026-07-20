@@ -8,6 +8,8 @@ export default defineConfig({
   timeout: 60_000,
   forbidOnly: true,
   retries: 0,
+  globalSetup: './tests/e2e/global-setup.ts',
+  globalTeardown: './tests/e2e/global-teardown.ts',
   reporter: [['list']],
   outputDir: 'test-results',
   use: {
