@@ -3,6 +3,23 @@
 Changes that affect users or maintainers are recorded here. Release-specific
 notes live under [`docs/releases/`](docs/releases/).
 
+## Unreleased
+
+## 0.3.0 — 2026-08-03
+
+- Chunked the host `activities.import` call into fixed-size batches (default
+  100 per chunk, configurable via `RunImportOptions.chunkSize`). Large
+  Revolut statements no longer fail at the final submit step, and a single
+  bad row or per-chunk host error no longer takes down a 200+ row batch.
+  Only a complete host outage (every chunk throwing) is fatal; per-chunk
+  failures are surfaced as per-row failures with sanitized messages.
+- Dodged the Wealthfolio 3.6.1 host sandbox's `es-module-lexer` rewriter
+  by dispatching `activities.import` through `Reflect.get`, so the
+  `import` identifier is never in the call position of the minified
+  bundle. The 3.6.1 host image SHA is recorded in `src/wealthfolio/api.ts`.
+- Bumped the metadata `IMPORTER_VERSION` to `0.2.0` so the new release
+  is forward-distinguishable from prior 0.1.x metadata on the host.
+
 ## 0.2.7
 
 - Added a strongly masked, instrument-bearing account-statement fixture and

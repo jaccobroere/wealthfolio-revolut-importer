@@ -73,6 +73,15 @@ export interface UploadSummary {
   readonly maxDate?: string;
 }
 
+/** Per-chunk summary of the import flow (mirrors the adapter `ImportChunkResult`). */
+export interface ImportChunkSummary {
+  index: number;
+  size: number;
+  imported: number;
+  duplicates: number;
+  failed: number;
+}
+
 /** Result of the import flow (mirrors the adapter `ImportFlowResult`). */
 export interface ImportSummary {
   readonly attempted: number;
@@ -83,6 +92,11 @@ export interface ImportSummary {
   /** Safe, row-level persistence errors from Wealthfolio's bulk API. */
   readonly failures: readonly { sourceRowNumber?: number; message: string }[];
   readonly fatal?: string;
+  /** Chunk size used for the host import call (counts only). */
+  readonly chunkSize?: number;
+  /** Per-chunk outcome summary (counts only). Empty for legacy single-call
+   * results that pre-date the chunking. */
+  readonly chunks?: readonly ImportChunkSummary[];
 }
 
 /** The full wizard state. */

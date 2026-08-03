@@ -5,7 +5,12 @@
  * imports `@wealthfolio/addon-sdk` activity types at runtime; the other
  * modules import SDK *types* for signatures only.
  */
-export type { ActivityMetadataV1, ImportFlowResult, PreparedDraft } from './types';
+export type {
+  ActivityMetadataV1,
+  ImportChunkResult,
+  ImportFlowResult,
+  PreparedDraft,
+} from './types';
 export { IMPORTER_ID, IMPORTER_VERSION, SOURCE_SCHEMA_VERSION, SOURCE_TYPE } from './types';
 export {
   buildMetadata,
@@ -35,4 +40,5 @@ export {
   withSavedMapping,
 } from './symbol-mappings';
 export type { CanonicalIdentity, ResolutionOutcome } from './symbol-mappings';
-export { prepareDrafts, runImport } from './import';
+export { prepareDrafts, runImport, DEFAULT_IMPORT_CHUNK_SIZE } from './import';
+export type { RunImportOptions } from './import';
