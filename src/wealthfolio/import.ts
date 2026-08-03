@@ -21,6 +21,36 @@ import { getActivities, checkImport, importCheckedActivities } from './api';
 import type { ImportFlowResult, PreparedDraft } from './types';
 import { IMPORTER_ID } from './types';
 
+/** Default chunk size for the host import call. Keeps per-call payloads well
+ * under typical postMessage / IPC bridge caps. Tunable via
+ * `RunImportOptions.chunkSize`. */
+export const DEFAULT_IMPORT_CHUNK_SIZE = 100;
+
+/** True when running in a dev build (counts-only debug logs enabled).
+ * Privacy-safe: no row data, no account ids, no balances. */
+function isDevelopment(): boolean {
+  try {
+    // Vite injects `import.meta.env.DEV`. Use optional chaining for non-Vite
+    // test environments where `import.meta` is undefined.
+    if (
+      typeof import.meta !== 'undefined' &&
+      (import.meta as ImportMeta & { env?: { DEV?: boolean } })?.env?.DEV
+    ) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+/** Options for `runImport`. */
+export interface RunImportOptions {
+  /** Maximum rows submitted per `activities.import` call. Must be a positive
+   * integer. Defaults to `DEFAULT_IMPORT_CHUNK_SIZE`. */
+  chunkSize?: number;
+}
+
 /**
  * Prepare drafts: attach fingerprints, source row numbers, and resolved
  * assets.
@@ -72,6 +102,7 @@ export async function prepareDrafts(
  * @param resolveAsset Optional resolver for instrument mappings (see
  *   `symbol-mappings.ts`). When omitted, instrument drafts use their source
  *   ticker as the asset symbol (no exchange/provider enrichment).
+ * @param options Optional knobs (e.g. `chunkSize` for the host import call).
  */
 export async function runImport(
   api: HostAPI,
@@ -82,7 +113,15 @@ export async function runImport(
   resolveAsset?: (
     draft: ActivityDraft,
   ) => Promise<import('@wealthfolio/addon-sdk').AssetResolutionInput | undefined>,
+  options: RunImportOptions = {},
 ): Promise<ImportFlowResult> {
+  const requestedChunkSize = options.chunkSize ?? DEFAULT_IMPORT_CHUNK_SIZE;
+  if (!Number.isInteger(requestedChunkSize) || requestedChunkSize <= 0) {
+    throw new Error(
+      `runImport: chunkSize must be a positive integer (received ${String(requestedChunkSize)})`,
+    );
+  }
+
   const result: ImportFlowResult = {
     attempted: 0,
     created: 0,
@@ -91,6 +130,8 @@ export async function runImport(
     skippedDuplicates: 0,
     blocked: 0,
     failures: [],
+    chunkSize: requestedChunkSize,
+    chunks: [],
   };
 
   // 1. Prepare drafts with fingerprints and assets.
@@ -144,53 +185,171 @@ export async function runImport(
   const confirmed = accepted.map(({ checked }) => ({ ...checked, isDraft: false }));
   result.attempted = confirmed.length;
 
-  let hostImport;
-  try {
-    hostImport = await importCheckedActivities(api, confirmed);
-  } catch (err) {
-    // A rejected import has no safe per-row outcome. Do not retry implicitly.
-    result.fatal = safeHostFailureMessage(err, 'batch');
-    result.failedFingerprints = accepted.map(({ prepared }) => prepared.fingerprint);
-    return result;
-  }
+  // Track fingerprints the host has accepted so far across chunks. The host
+  // also dedupes per-call via its in-memory index, but tracking locally
+  // keeps our `failures` and `failedFingerprints` bookkeeping honest when
+  // a chunk throws after a previous one succeeded.
+  const importedFingerprints: string[] = [];
+  const importedSet = new Set<string>();
+  let totalDuplicates = 0;
+  // True only when every chunk threw (a true host-wide outage). Chunks that
+  // returned successfully but reported 0 imports — e.g. because every row
+  // was already a host-side duplicate — are not failures.
+  let allChunksFailed = true;
 
-  // 6. The host preserves request order in its import result. That gives us
-  // safe row correlation without rebuilding low-level ActivityCreate payloads.
-  if (hostImport.activities.length !== accepted.length) {
-    result.fatal = 'Wealthfolio returned an incomplete import result. No automatic retry was made.';
-    result.failedFingerprints = accepted.map(({ prepared }) => prepared.fingerprint);
-    return result;
-  }
+  // 6. Submit reviewed rows to the host in fixed-size chunks. Each chunk is
+  // the host's atomic unit; per-chunk failures surface as per-row failures
+  // (not a fatal) so a host payload cap or a single bad row no longer takes
+  // down a 200+ row batch. Only a complete host outage — every chunk throws
+  // — is fatal.
+  for (let chunkStart = 0; chunkStart < confirmed.length; chunkStart += requestedChunkSize) {
+    const chunkEnd = Math.min(chunkStart + requestedChunkSize, confirmed.length);
+    const chunkAccepted = accepted.slice(chunkStart, chunkEnd);
+    const chunkConfirmed = confirmed.slice(chunkStart, chunkEnd);
+    const chunkIndex = result.chunks.length;
 
-  const imported: string[] = [];
-  let hostDuplicates = 0;
-  for (let i = 0; i < accepted.length; i++) {
-    const returned = hostImport.activities[i];
-    const preparedDraft = accepted[i].prepared;
-    if (isHostDuplicate(returned)) {
-      hostDuplicates += 1;
-      continue;
-    }
-    if (!returned.isValid || hasErrors(returned)) {
-      result.failures.push({
-        sourceRowNumber: preparedDraft.sourceRowNumber,
-        message: safeHostFailureMessage(returned.errors),
+    let hostImport: Awaited<ReturnType<typeof importCheckedActivities>>;
+    try {
+      hostImport = await importCheckedActivities(api, chunkConfirmed);
+    } catch (err) {
+      // A chunk-level rejection is per-row failure, not a fatal — provided
+      // some other chunk succeeds. Record a sanitized message for every row
+      // in the failed chunk and continue.
+      const message = safeHostFailureMessage(err, 'activity');
+      let chunkFailed = 0;
+      for (const { prepared: p } of chunkAccepted) {
+        if (importedSet.has(p.fingerprint)) continue;
+        result.failures.push({
+          sourceRowNumber: p.sourceRowNumber,
+          message,
+        });
+        result.failedFingerprints.push(p.fingerprint);
+        chunkFailed += 1;
+      }
+      result.chunks.push({
+        index: chunkIndex,
+        size: chunkConfirmed.length,
+        imported: 0,
+        duplicates: 0,
+        failed: chunkFailed,
       });
-      result.failedFingerprints.push(preparedDraft.fingerprint);
+      if (isDevelopment()) {
+        // Privacy-safe debug summary: counts only.
+        console.debug(
+          `chunk ${chunkIndex}: size=${chunkConfirmed.length}, imported=0, failed=${chunkFailed}`,
+        );
+      }
       continue;
     }
-    imported.push(preparedDraft.fingerprint);
+
+    if (hostImport.activities.length !== chunkAccepted.length) {
+      // Per-chunk incomplete result: treat as a per-row failure for the whole
+      // chunk. The host returned something but the row count doesn't line up
+      // with the request.
+      const message = 'Wealthfolio returned an incomplete import result for this batch.';
+      let chunkFailed = 0;
+      for (const { prepared: p } of chunkAccepted) {
+        if (importedSet.has(p.fingerprint)) continue;
+        result.failures.push({
+          sourceRowNumber: p.sourceRowNumber,
+          message,
+        });
+        result.failedFingerprints.push(p.fingerprint);
+        chunkFailed += 1;
+      }
+      result.chunks.push({
+        index: chunkIndex,
+        size: chunkConfirmed.length,
+        imported: 0,
+        duplicates: 0,
+        failed: chunkFailed,
+      });
+      if (isDevelopment()) {
+        console.debug(
+          `chunk ${chunkIndex}: size=${chunkConfirmed.length}, imported=0, failed=${chunkFailed} (incomplete)`,
+        );
+      }
+      continue;
+    }
+    let chunkImported = 0;
+    let chunkDuplicates = 0;
+    let chunkFailed = 0;
+    for (let i = 0; i < chunkAccepted.length; i++) {
+      const returned = hostImport.activities[i];
+      const preparedDraft = chunkAccepted[i]!.prepared;
+      // Skip rows already imported by an earlier successful chunk.
+      if (importedSet.has(preparedDraft.fingerprint)) {
+        chunkDuplicates += 1;
+        continue;
+      }
+      const duplicate = isHostDuplicate(returned);
+      const invalid = !returned.isValid || hasErrors(returned);
+      if (duplicate) {
+        chunkDuplicates += 1;
+        continue;
+      }
+      if (invalid) {
+        result.failures.push({
+          sourceRowNumber: preparedDraft.sourceRowNumber,
+          message: safeHostFailureMessage(returned.errors),
+        });
+        result.failedFingerprints.push(preparedDraft.fingerprint);
+        chunkFailed += 1;
+        continue;
+      }
+      importedFingerprints.push(preparedDraft.fingerprint);
+      importedSet.add(preparedDraft.fingerprint);
+      chunkImported += 1;
+    }
+
+    totalDuplicates += chunkDuplicates;
+
+    // Per-chunk integrity check: if the host's summary reports more imported
+    // than we tracked, treat the discrepancy as a per-row failure for the
+    // unaccounted rows in this chunk (count = max(0, summary - chunkImported)).
+    const summaryImported = hostImport.summary.imported;
+    const unaccountedImported = Math.max(0, summaryImported - chunkImported);
+    if (unaccountedImported > 0) {
+      // Conservative: we don't know which rows those are. Push a diagnostic
+      // entry referencing the whole chunk's source rows.
+      const sourceRowNumbers = chunkAccepted.flatMap(({ prepared: p }) => [p.sourceRowNumber]);
+      result.failures.push({
+        sourceRowNumber: sourceRowNumbers[0],
+        message: 'Wealthfolio did not return a complete import outcome for some activities.',
+      });
+    }
+
+    result.chunks.push({
+      index: chunkIndex,
+      size: chunkConfirmed.length,
+      imported: chunkImported,
+      duplicates: chunkDuplicates,
+      failed: chunkFailed + unaccountedImported,
+    });
+    // A chunk that returned a complete per-row outcome is a successful chunk
+    // regardless of how many rows it actually imported. Only a chunk that
+    // threw (caught above) leaves `allChunksFailed` set.
+    allChunksFailed = false;
+    if (isDevelopment()) {
+      console.debug(
+        `chunk ${chunkIndex}: size=${chunkConfirmed.length}, imported=${chunkImported}, failed=${chunkFailed + unaccountedImported}`,
+      );
+    }
   }
 
-  result.created = hostImport.summary.imported;
-  result.skippedDuplicates += Math.max(hostDuplicates, hostImport.summary.duplicates);
-  if (!hostImport.summary.success || hostImport.summary.imported !== imported.length) {
+  // 7. Aggregate.
+  result.created = importedFingerprints.length;
+  result.importedFingerprints = importedFingerprints;
+  result.skippedDuplicates += totalDuplicates;
+
+  if (result.created === 0 && allChunksFailed) {
+    // Mirrors the pre-chunking fatal contract: nothing landed, treat the
+    // whole batch as a complete host outage.
     result.fatal =
-      'Wealthfolio did not return a complete import outcome. No automatic retry was made.';
-    result.failedFingerprints = accepted.map(({ prepared }) => prepared.fingerprint);
+      'Wealthfolio could not complete this import batch. Re-check the destination account and security mappings, then retry.';
+    result.importedFingerprints = [];
     return result;
   }
-  result.importedFingerprints = imported;
 
   return result;
 }
@@ -209,6 +368,7 @@ function isHostDuplicate(activity: ActivityImport): boolean {
 
 // Re-export the importer id for callers (e.g. tests).
 export { IMPORTER_ID };
+export { IMPORTER_VERSION } from './types';
 
 /**
  * Host messages may contain account ids or source-derived values. Render only

@@ -162,7 +162,9 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
           blocked: result.blocked,
           failed: result.failedFingerprints.length,
           failures: result.failures,
-          fatal: result.fatal,
+          ...(result.fatal ? { fatal: result.fatal } : {}),
+          chunkSize: result.chunkSize,
+          chunks: result.chunks,
         },
       });
     } catch (err) {
