@@ -13,14 +13,23 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { AlertCircle, CheckCircle2, FileText, Upload } from 'lucide-react';
 import { parseRevolutCsv } from '../parser/parse-csv';
+import type { RevolutSourceRow } from '../domain/revolut-row';
 import { validateBatch } from '../validation/validate-batch';
 import type { BatchResult } from '../domain/import-outcome';
 import type { UploadSummary } from '../state/import-state';
 import { uploadSummaryFromBatch } from '../state/import-state';
 
 export interface UploadStepProps {
-  /** Called when a valid CSV is parsed and the batch is ready. */
-  onComplete: (batch: BatchResult, summary: UploadSummary) => void;
+  /**
+   * Called when a valid CSV is parsed and the batch is ready. `rows` are the
+   * pristine parsed source rows, kept so the review step can re-run the
+   * pipeline with reviewer overrides without a re-upload.
+   */
+  onComplete: (
+    batch: BatchResult,
+    summary: UploadSummary,
+    rows: readonly RevolutSourceRow[],
+  ) => void;
   /** Called when the header is invalid; the actionable error is shown inline. */
   onError: (message: string) => void;
   /** Last upload summary, if any (shown when re-entering the step). */
@@ -50,7 +59,7 @@ export function UploadStep({ onComplete, onError, summary, error }: UploadStepPr
       }
       const batch = await validateBatch(parsed.rows);
       const summary = uploadSummaryFromBatch(batch, parsed.header.ok, parsed.header.error);
-      onComplete(batch, summary);
+      onComplete(batch, summary, parsed.rows);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setLocalError(msg);
