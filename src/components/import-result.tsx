@@ -3,7 +3,8 @@
  *
  * Displays counts only (attempted, created, skipped duplicates, blocked,
  * failed). Never displays raw rows or balances. A fatal error, if any, is
- * shown with the actionable message.
+ * shown with the actionable message. When the import was chunked across
+ * multiple host writes, the result surfaces a counts-only batches summary.
  */
 import { Alert, AlertDescription, AlertTitle } from '@wealthfolio/ui';
 import { Button } from '@wealthfolio/ui';
@@ -18,6 +19,10 @@ export interface ImportResultProps {
 
 export function ImportResult({ summary, onReset, onReviewMappings }: ImportResultProps) {
   const hasFatal = !!summary.fatal;
+  const hasFailures = summary.failed > 0 || summary.failures.length > 0;
+  const isPartial = !hasFatal && summary.created > 0 && hasFailures;
+  const chunkCount = summary.chunks?.length ?? 0;
+  const showChunkSummary = !hasFatal && chunkCount > 1;
   return (
     <Card>
       <CardHeader>
@@ -38,6 +43,24 @@ export function ImportResult({ summary, onReset, onReviewMappings }: ImportResul
           </Alert>
         )}
 
+        {isPartial && (
+          <Alert>
+            <AlertTitle>Partial import</AlertTitle>
+            <AlertDescription>
+              <p>
+                {summary.created} activit{summary.created === 1 ? 'y' : 'ies'} created successfully,{' '}
+                {summary.failed} failed. Review the safe diagnostics below.
+              </p>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {showChunkSummary && (
+          <p className="text-muted-foreground text-xs" data-testid="chunk-summary">
+            Imported in {chunkCount} batches.
+          </p>
+        )}
+
         <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <Stat label="Attempted" value={summary.attempted} />
           <Stat label="Created" value={summary.created} />
@@ -52,7 +75,9 @@ export function ImportResult({ summary, onReset, onReviewMappings }: ImportResul
         <p className="text-muted-foreground text-sm">
           {hasFatal
             ? 'No per-activity outcome was returned. Review mappings and retry deliberately.'
-            : 'Only activities reported as created by the host were written. Failed or blocked rows were not imported.'}
+            : isPartial
+              ? 'Some activities were not created. Review the safe diagnostics below.'
+              : 'Only activities reported as created by the host were written. Failed or blocked rows were not imported.'}
         </p>
 
         {summary.failures.length > 0 && (
