@@ -25,6 +25,8 @@ import type { Account, SymbolSearchResult } from '@wealthfolio/addon-sdk';
 
 import type { ActivityDraft } from '../domain/activity-draft';
 import type { BatchResult, RowOutcome } from '../domain/import-outcome';
+import type { RevolutSourceRow } from '../domain/revolut-row';
+import type { RowOverride, RowOverrides } from '../domain/row-override';
 import type { ReconciliationReport } from '../domain/reconciliation';
 import type { CanonicalIdentity } from '../wealthfolio/symbol-mappings';
 
@@ -33,7 +35,15 @@ export type WizardStep = 'upload' | 'mapping' | 'review' | 'reconcile' | 'import
 
 /** Review filter keys. Every row is reachable through exactly one category. */
 export type ReviewFilter =
-  'all' | 'errors' | 'warnings' | 'duplicates' | 'cash' | 'trades' | 'dividends' | 'credits';
+  | 'all'
+  | 'errors'
+  | 'warnings'
+  | 'duplicates'
+  | 'cash'
+  | 'trades'
+  | 'dividends'
+  | 'credits'
+  | 'ignored';
 
 /**
  * Resolution state for a single source ticker. `pending` until the user
@@ -105,6 +115,26 @@ export interface ImportState {
   readonly upload: UploadSummary | null;
   /** Parsed batch (outcomes + fingerprints). Cleared on reset. */
   readonly batch: BatchResult | null;
+  /**
+   * Pristine parsed source rows. Held so the review step can re-run the
+   * pipeline with reviewer overrides; overrides are always re-applied to these
+   * originals rather than stacked on a previous edit.
+   */
+  readonly sourceRows: readonly RevolutSourceRow[];
+  /** Reviewer per-row ignore/edit decisions, keyed by source row number. */
+  readonly overrides: RowOverrides;
+  /**
+   * Bumped by every override mutation. `0` means "pristine upload"; the page
+   * rebuilds the batch whenever this changes, so the counter is what makes the
+   * rebuild effect fire exactly once per decision.
+   */
+  readonly overridesVersion: number;
+  /**
+   * Set when re-running validation after a reviewer decision failed. While it
+   * is set, `state.batch` no longer reflects `state.overrides`, so the batch is
+   * not safe to import.
+   */
+  readonly rebuildError: string | null;
   /** Selected destination account id. */
   readonly accountId: string | null;
   /** Accounts available from the host (loaded in mapping). */
@@ -129,6 +159,10 @@ export const INITIAL_STATE: ImportState = {
   step: 'upload',
   upload: null,
   batch: null,
+  sourceRows: [],
+  overrides: {},
+  overridesVersion: 0,
+  rebuildError: null,
   accountId: null,
   accounts: [],
   tickers: {},
@@ -148,6 +182,7 @@ export type Action =
       type: 'UPLOAD_COMPLETE';
       batch: BatchResult;
       summary: UploadSummary;
+      rows: readonly RevolutSourceRow[];
     }
   | { type: 'UPLOAD_FAILED'; error: string }
   | { type: 'GOTO'; step: WizardStep }
@@ -169,6 +204,12 @@ export type Action =
       resolution: TickerResolution;
     }
   | { type: 'SET_FILTER'; filter: ReviewFilter }
+  /** Set (or clear, when `override` is null) one row's reviewer decision. */
+  | { type: 'SET_ROW_OVERRIDE'; rowIndex: number; override: RowOverride | null }
+  | { type: 'CLEAR_ROW_OVERRIDES' }
+  | { type: 'REBUILD_FAILED'; error: string }
+  /** Batch recomputed from the pristine rows + current overrides. */
+  | { type: 'BATCH_REBUILT'; batch: BatchResult; summary: UploadSummary }
   | { type: 'RECONCILE_COMPLETE'; report: ReconciliationReport }
   | { type: 'SET_ACKNOWLEDGED'; acknowledged: boolean }
   | { type: 'IMPORT_STARTED' }
@@ -194,6 +235,9 @@ export function reducer(state: ImportState, action: Action): ImportState {
         step: 'mapping',
         upload: action.summary,
         batch: action.batch,
+        sourceRows: action.rows,
+        overrides: {},
+        overridesVersion: 0,
         error: null,
       };
 
@@ -255,6 +299,66 @@ export function reducer(state: ImportState, action: Action): ImportState {
 
     case 'SET_FILTER':
       return { ...state, filter: action.filter };
+
+    case 'SET_ROW_OVERRIDE': {
+      const next = { ...state.overrides };
+      if (action.override === null) delete next[action.rowIndex];
+      else next[action.rowIndex] = action.override;
+      // Changing the data invalidates the reconciliation the user acknowledged.
+      return {
+        ...state,
+        overrides: next,
+        overridesVersion: state.overridesVersion + 1,
+        acknowledged: false,
+      };
+    }
+
+    case 'CLEAR_ROW_OVERRIDES':
+      if (Object.keys(state.overrides).length === 0) return state;
+      return {
+        ...state,
+        overrides: {},
+        overridesVersion: state.overridesVersion + 1,
+        acknowledged: false,
+      };
+
+    case 'BATCH_REBUILT': {
+      // An edit can make a previously-invalid row valid, which introduces a
+      // ticker that was never in the mapping step. Re-derive the entries so a
+      // new ticker arrives `pending` and blocks Import until it is confirmed;
+      // tickers that survive the rebuild keep the resolution they already had.
+      const rebuilt = buildTickerEntries(action.batch);
+      const tickers: Record<string, TickerEntry> = {};
+      for (const [ticker, entry] of Object.entries(rebuilt)) {
+        const existing = state.tickers[ticker];
+        tickers[ticker] = existing ? { ...entry, resolution: existing.resolution } : entry;
+      }
+      // Remember a confirmed identity even when its last row just left the
+      // batch, so ignoring a security's only row and then restoring it does not
+      // force the reviewer back to the mapping step. A resolved entry with no
+      // rows blocks nothing and is never looked up during import.
+      for (const [ticker, entry] of Object.entries(state.tickers)) {
+        if (!tickers[ticker] && entry.resolution.status === 'resolved') {
+          tickers[ticker] = { ...entry, rowIndices: [] };
+        }
+      }
+      return {
+        ...state,
+        batch: action.batch,
+        upload: action.summary,
+        tickers,
+        // The previous report described the pre-edit batch; recomputed on entry
+        // to the reconcile step.
+        reconciliation: null,
+        rebuildError: null,
+        acknowledged: false,
+      };
+    }
+
+    case 'REBUILD_FAILED':
+      // The recorded overrides no longer match the batch in state, so the batch
+      // is not safe to import until the rebuild succeeds or is undone.
+      return { ...state, rebuildError: action.error };
 
     case 'RECONCILE_COMPLETE':
       return { ...state, reconciliation: action.report };
@@ -371,8 +475,37 @@ export function canImport(state: ImportState): boolean {
     noFatalRows(state) &&
     allTickersResolved(state) &&
     reconciliationPasses(state) &&
+    hasImportableRows(state) &&
+    state.rebuildError === null &&
     state.acknowledged
   );
+}
+
+/**
+ * The drafts to write, zipped with their fingerprints and source row numbers.
+ *
+ * These three arrays are consumed positionally by `prepareDrafts`, so they MUST
+ * be derived from one filtered list. Taking drafts from the imported subset
+ * while taking fingerprints and row numbers from every row desynchronizes them
+ * as soon as any row is ignored, stamping one row's idempotency key onto
+ * another row's activity.
+ */
+export function buildImportPayload(batch: BatchResult): {
+  drafts: ActivityDraft[];
+  fingerprints: string[];
+  sourceRowNumbers: number[];
+} {
+  const importable = batch.outcomes.filter((o) => o.kind === 'imported' && o.draft !== undefined);
+  return {
+    drafts: importable.map((o) => o.draft as ActivityDraft),
+    fingerprints: importable.map((o) => batch.fingerprints[o.rowIndex - 1]),
+    sourceRowNumbers: importable.map((o) => o.rowIndex),
+  };
+}
+
+/** True when at least one row would actually be written. */
+export function hasImportableRows(state: ImportState): boolean {
+  return (state.batch?.counts.imported ?? 0) > 0;
 }
 
 /**
@@ -395,6 +528,12 @@ export function blockingReasons(state: ImportState): string[] {
   if (!reconciliationPasses(state)) {
     reasons.push('Reconciliation residuals must pass');
   }
+  if (!hasImportableRows(state)) {
+    reasons.push('No rows left to import');
+  }
+  if (state.rebuildError !== null) {
+    reasons.push('Re-check the rows you changed; recalculating them failed');
+  }
   if (!state.acknowledged) {
     reasons.push('Acknowledge reconciliation');
   }
@@ -407,6 +546,7 @@ export function blockingReasons(state: ImportState): string[] {
  * Categorize a single outcome into a review category. Every row maps to
  * exactly one category (conservation).
  *
+ * - `ignored`    — rows the reviewer explicitly excluded (never imported).
  * - `errors`     — unknown or invalid rows (fatal, block Import).
  * - `duplicates` — imported rows whose fingerprint collides with an earlier
  *                  row in the same file.
@@ -416,8 +556,8 @@ export function blockingReasons(state: ImportState): string[] {
  * - `credits`    — CREDIT (FEE_REFUND / BONUS).
  * - `warnings`   — imported rows with a trade-rounding variance (diagnostic).
  *
- * `all` matches everything. Order of precedence: errors > duplicates >
- * warnings > trades > cash > dividends > credits.
+ * `all` matches everything. Order of precedence: ignored > errors > duplicates
+ * > warnings > trades > cash > dividends > credits.
  */
 export function categorize(
   outcome: RowOutcome,
@@ -425,6 +565,7 @@ export function categorize(
   fingerprints: readonly string[],
   roundingVariances: ReadonlyMap<number, string>,
 ): ReviewFilter {
+  if (outcome.kind === 'ignored') return 'ignored';
   if (outcome.kind === 'unknown' || outcome.kind === 'invalid') return 'errors';
   if (outcome.kind !== 'imported' || !outcome.draft) return 'errors';
   const fp = fingerprints[outcome.rowIndex - 1] ?? '';
@@ -475,6 +616,7 @@ export function categoryCounts(state: ImportState): Record<ReviewFilter, number>
     trades: 0,
     dividends: 0,
     credits: 0,
+    ignored: 0,
   };
   if (!state.batch) return counts;
   const rounding = new Map<number, string>(
