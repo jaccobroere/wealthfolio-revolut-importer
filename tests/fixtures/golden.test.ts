@@ -22,6 +22,7 @@ describe('golden: revolut-all-supported-types fixture', () => {
       imported: 7,
       unknown: 0,
       invalid: 0,
+      ignored: 0,
     });
 
     const typeCounts: Record<string, number> = {};
@@ -71,7 +72,13 @@ describe('golden: masked E2E portfolio fixture', () => {
   it('keeps the broker schema and all portfolio rows valid', async () => {
     expect(parsed.header.ok).toBe(true);
     const validated = await validateBatch(parsed.rows);
-    expect(validated.counts).toEqual({ total: 8, imported: 8, unknown: 0, invalid: 0 });
+    expect(validated.counts).toEqual({
+      total: 8,
+      imported: 8,
+      unknown: 0,
+      invalid: 0,
+      ignored: 0,
+    });
     expect(validated.collisions).toEqual([]);
   });
 

@@ -24,7 +24,7 @@
  * No write occurs before explicit confirmation. Upload, mapping, review,
  * and reconciliation never write.
  */
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import type { AddonContext, AddonRouteLocation } from '@wealthfolio/addon-sdk';
 import { Button } from '@wealthfolio/ui';
 import { Card, CardContent } from '@wealthfolio/ui';
@@ -32,6 +32,7 @@ import {
   INITIAL_STATE,
   reducer,
   canImport,
+  buildImportPayload,
   type ImportState,
   type ReviewFilter,
   type TickerResolution,
@@ -40,6 +41,10 @@ import {
 } from '../state/import-state';
 import type { ActivityDraft } from '../domain/activity-draft';
 import type { BatchResult } from '../domain/import-outcome';
+import type { RevolutSourceRow } from '../domain/revolut-row';
+import type { RowOverride } from '../domain/row-override';
+import { validateBatch } from '../validation/validate-batch';
+import { uploadSummaryFromBatch } from '../state/import-state';
 import { reconcile } from '../reconciliation/reconcile';
 import { runImport } from '../wealthfolio/import';
 import { identityToAsset, type CanonicalIdentity } from '../wealthfolio/symbol-mappings';
@@ -59,8 +64,21 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
 
   // --- Step transitions -----------------------------------------------------
 
-  const handleUploadComplete = useCallback((batch: BatchResult, summary: UploadSummary) => {
-    dispatch({ type: 'UPLOAD_COMPLETE', batch, summary });
+  const [rebuilding, setRebuilding] = useState(false);
+
+  const handleUploadComplete = useCallback(
+    (batch: BatchResult, summary: UploadSummary, rows: readonly RevolutSourceRow[]) => {
+      dispatch({ type: 'UPLOAD_COMPLETE', batch, summary, rows });
+    },
+    [],
+  );
+
+  const handleOverrideChange = useCallback((rowIndex: number, override: RowOverride | null) => {
+    dispatch({ type: 'SET_ROW_OVERRIDE', rowIndex, override });
+  }, []);
+
+  const handleClearOverrides = useCallback(() => {
+    dispatch({ type: 'CLEAR_ROW_OVERRIDES' });
   }, []);
 
   const handleUploadError = useCallback((message: string) => {
@@ -94,12 +112,54 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
     dispatch({ type: 'SET_ACKNOWLEDGED', acknowledged });
   }, []);
 
-  // Compute reconciliation when entering the reconcile step.
-  const computeReconciliation = useCallback(() => {
-    if (!state.batch) return;
-    const report = reconcile(state.batch.outcomes);
-    dispatch({ type: 'RECONCILE_COMPLETE', report });
-  }, [state.batch]);
+  // Re-run validation whenever the reviewer changes a row decision. The stored
+  // source rows stay pristine, so overrides are re-applied from the original
+  // values rather than stacked on a previous edit.
+  const { sourceRows, overrides, overridesVersion } = state;
+  useEffect(() => {
+    if (overridesVersion === 0 || sourceRows.length === 0) {
+      // A reset clears the decisions; make sure the flag does not stick true
+      // when an in-flight rebuild was cancelled before it could settle.
+      setRebuilding(false);
+      return;
+    }
+    let cancelled = false;
+    setRebuilding(true);
+    validateBatch(sourceRows, overrides)
+      .then((batch) => {
+        if (cancelled) return;
+        dispatch({
+          type: 'BATCH_REBUILT',
+          batch,
+          summary: uploadSummaryFromBatch(batch, true),
+        });
+      })
+      .catch((err) => {
+        // The recorded decisions and the batch in state have diverged, so the
+        // batch must not be imported until a later rebuild succeeds. The raw
+        // message is deliberately dropped: a parse error can embed the row's
+        // own value, which must not reach a rendered surface.
+        if (cancelled) return;
+        void err;
+        dispatch({ type: 'REBUILD_FAILED', error: 'Could not recalculate the changed rows' });
+      })
+      .finally(() => {
+        if (!cancelled) setRebuilding(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceRows, overrides, overridesVersion]);
+
+  // Compute the reconciliation report whenever the reconcile step lacks one for
+  // the current batch. Self-healing by construction: a rebuild that lands after
+  // the user has already moved on clears the report, and this recomputes it
+  // rather than leaving Import permanently blocked.
+  const { step, batch, reconciliation } = state;
+  useEffect(() => {
+    if (step !== 'reconcile' || !batch || reconciliation !== null || rebuilding) return;
+    dispatch({ type: 'RECONCILE_COMPLETE', report: reconcile(batch.outcomes) });
+  }, [step, batch, reconciliation, rebuilding]);
 
   const goToReview = useCallback(() => {
     dispatch({ type: 'GOTO', step: 'review' });
@@ -107,10 +167,7 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
 
   const goToReconcile = useCallback(() => {
     dispatch({ type: 'GOTO', step: 'reconcile' });
-    // Compute reconciliation after the step transition.
-    // Use a microtask so the reducer applies the GOTO first.
-    queueMicrotask(computeReconciliation);
-  }, [computeReconciliation]);
+  }, []);
 
   const goBackToMapping = useCallback(() => {
     dispatch({ type: 'GOTO', step: 'mapping' });
@@ -126,9 +183,7 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
     if (!canImport(state) || !state.batch || !state.accountId) return;
     dispatch({ type: 'IMPORT_STARTED' });
     try {
-      const drafts: ActivityDraft[] = [...state.batch.imported];
-      const fingerprints = state.batch.fingerprints;
-      const sourceRowNumbers = state.batch.outcomes.map((o) => o.rowIndex);
+      const { drafts, fingerprints, sourceRowNumbers } = buildImportPayload(state.batch);
 
       // Build the asset resolver from resolved tickers.
       const tickerMap = new Map<string, CanonicalIdentity>();
@@ -162,7 +217,9 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
           blocked: result.blocked,
           failed: result.failedFingerprints.length,
           failures: result.failures,
-          fatal: result.fatal,
+          ...(result.fatal ? { fatal: result.fatal } : {}),
+          chunkSize: result.chunkSize,
+          chunks: result.chunks,
         },
       });
     } catch (err) {
@@ -245,6 +302,9 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
         <ReviewStep
           state={state}
           onFilterChange={handleFilterChange}
+          onOverrideChange={handleOverrideChange}
+          onClearOverrides={handleClearOverrides}
+          rebuilding={rebuilding}
           onContinue={goToReconcile}
           onBack={goBackToMapping}
         />

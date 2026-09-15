@@ -85,6 +85,7 @@ export async function buildState(
     type: 'UPLOAD_COMPLETE',
     batch,
     summary: uploadSummaryFromBatch(batch, parsed.header.ok, parsed.header.error),
+    rows: parsed.rows,
   });
 
   state = reducer(state, {
