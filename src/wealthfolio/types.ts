@@ -12,7 +12,7 @@ import type { AssetResolutionInput } from '@wealthfolio/addon-sdk';
 export const IMPORTER_ID = 'revolut-importer';
 
 /** Add-on version, recorded in metadata for forward-compatibility. */
-export const IMPORTER_VERSION = '0.1.0';
+export const IMPORTER_VERSION = '0.2.0';
 
 /** Source schema version fingerprinted into every activity. */
 export const SOURCE_SCHEMA_VERSION = 'revolut-investment-csv:v1';
@@ -77,6 +77,20 @@ export interface ImportFailure {
   message: string;
 }
 
+/** Per-chunk summary of the import flow. */
+export interface ImportChunkResult {
+  /** 0-based chunk index in submission order. */
+  index: number;
+  /** Number of rows submitted in this chunk. */
+  size: number;
+  /** Rows the host reported imported in this chunk. */
+  imported: number;
+  /** Rows the host reported as duplicates in this chunk. */
+  duplicates: number;
+  /** Rows in this chunk that ended up in `failures`. */
+  failed: number;
+}
+
 /** Result of the import flow. */
 export interface ImportFlowResult {
   /** Number of reviewed rows submitted to Wealthfolio's import API. */
@@ -96,4 +110,8 @@ export interface ImportFlowResult {
   failures: ImportFailure[];
   /** Fatal host error, when `checkImport` or `import` threw. */
   fatal?: string;
+  /** Chunk size used for the host import call (counts only). */
+  chunkSize: number;
+  /** Per-chunk outcome summary (counts only). */
+  chunks: ImportChunkResult[];
 }
