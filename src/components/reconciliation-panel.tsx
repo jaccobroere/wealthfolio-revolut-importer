@@ -21,6 +21,7 @@ import { Checkbox } from '@wealthfolio/ui';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@wealthfolio/ui';
 import type { ImportState } from '../state/import-state';
 import { blockingReasons, canImport } from '../state/import-state';
+import { countOverrides } from '../domain/row-override';
 
 export interface ReconciliationPanelProps {
   state: ImportState;
@@ -38,6 +39,7 @@ export function ReconciliationPanel({
   const report = state.reconciliation;
   const enabled = canImport(state);
   const reasons = blockingReasons(state);
+  const overrides = countOverrides(state.overrides);
 
   return (
     <Card>
@@ -89,6 +91,35 @@ export function ReconciliationPanel({
         ) : (
           <p className="text-muted-foreground text-sm">Reconciliation not yet computed.</p>
         )}
+
+        {overrides.ignored + overrides.edited > 0 ? (
+          <div
+            className="space-y-1 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm"
+            data-testid="override-audit"
+          >
+            <p className="font-medium">Your changes to this statement</p>
+            {overrides.ignored > 0 ? (
+              <p>
+                {overrides.ignored} row(s) ignored
+                <span className="ml-1 text-muted-foreground">
+                  — excluded from the import and counted as ignored.
+                </span>
+              </p>
+            ) : null}
+            {overrides.edited > 0 ? (
+              <p>
+                {overrides.edited} row(s) edited
+                <span className="ml-1 text-muted-foreground">
+                  — flagged as edited in the review table.
+                </span>
+              </p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              These changes affect this import only; your CSV file is untouched. The totals above
+              already reflect them.
+            </p>
+          </div>
+        ) : null}
 
         <div className="flex items-start gap-3 rounded-md border p-3">
           <Checkbox

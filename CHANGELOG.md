@@ -3,6 +3,47 @@
 Changes that affect users or maintainers are recorded here. Release-specific
 notes live under [`docs/releases/`](docs/releases/).
 
+## Unreleased
+
+## 0.4.0 — 2026-09-15
+
+- Added: fix problem rows in the review step instead of editing the CSV. Any
+  row expands into per-row controls to edit its source values (with a live
+  preview of how the corrected row validates) or ignore it. Ignored rows become
+  a new `ignored` outcome with its own review category, so every row still
+  produces exactly one outcome; edited rows are flagged in the review table and
+  the reconcile step summarizes every change before acknowledgement. Overrides
+  are never written back to the source file.
+- Fixed: an edit that turned an invalid row into a valid trade could introduce a
+  ticker the mapping step never saw, and Import would write it against an
+  unverified symbol. Ticker entries are re-derived after every rebuild; new
+  tickers block until confirmed, confirmed ones keep their resolution.
+- Fixed: drafts, fingerprints, and source row numbers are now derived from one
+  filtered list (`buildImportPayload`). They are zipped positionally, so
+  excluding any row previously desynchronized them — failing the length guard,
+  and mispairing idempotency keys had that guard not been there.
+- Fixed: Import is blocked when the batch would write nothing, and when
+  re-running validation after a reviewer decision fails (previously silent).
+- Fixed: the reconciliation report is computed by an effect whenever the
+  reconcile step lacks one, replacing a `queueMicrotask` ordering hack that
+  could leave Import permanently blocked when a rebuild landed just after
+  Continue was clicked.
+
+## 0.3.0 — 2026-08-03
+
+- Chunked the host `activities.import` call into fixed-size batches (default
+  100 per chunk, configurable via `RunImportOptions.chunkSize`). Large
+  Revolut statements no longer fail at the final submit step, and a single
+  bad row or per-chunk host error no longer takes down a 200+ row batch.
+  Only a complete host outage (every chunk throwing) is fatal; per-chunk
+  failures are surfaced as per-row failures with sanitized messages.
+- Dodged the Wealthfolio 3.6.1 host sandbox's `es-module-lexer` rewriter
+  by dispatching `activities.import` through `Reflect.get`, so the
+  `import` identifier is never in the call position of the minified
+  bundle. The 3.6.1 host image SHA is recorded in `src/wealthfolio/api.ts`.
+- Bumped the metadata `IMPORTER_VERSION` to `0.2.0` so the new release
+  is forward-distinguishable from prior 0.1.x metadata on the host.
+
 ## 0.2.7
 
 - Added a strongly masked, instrument-bearing account-statement fixture and
