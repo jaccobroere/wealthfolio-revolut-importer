@@ -7,8 +7,13 @@
  * 3. Rejected/incomplete imports never mark fingerprints as imported.
  * 4. Legacy add-on metadata remains scoped to its owning importer.
  * 6. `UNKNOWN` activity types are blocked (never sent to the host).
+ * 7. Large imports are chunked (default 100/chunk) so a host payload-size
+ *    cap or a single bad row no longer takes down a 200+ row batch.
+ * 8. Per-row host-side validation failures are reported as per-row
+ *    failures, not as a fatal; only a complete host outage is fatal.
  */
 import { describe, expect, it } from 'vitest';
+import type { ActivityImport } from '@wealthfolio/addon-sdk';
 
 import type { ActivityDraft } from '../../src/domain/activity-draft';
 import { runImport } from '../../src/wealthfolio/import';
@@ -169,20 +174,24 @@ describe('Revolut adapter: idempotent import flow', () => {
 
     const result = await runImport(host.api, 'acct-1', drafts, fps, rows);
 
+    // Under chunking, a host-reported per-row validation failure is a per-row
+    // failure for the invalid row, not a fatal. The valid row is treated as
+    // imported based on its per-row outcome (the fake's `imported: 0` summary
+    // is overridden by the per-row signal).
     expect(result.attempted).toBe(2);
-    expect(result.created).toBe(0);
-    expect(result.importedFingerprints).toHaveLength(0);
-    expect(result.failedFingerprints).toHaveLength(2);
-    expect(result.fatal).toBe(
-      'Wealthfolio did not return a complete import outcome. No automatic retry was made.',
-    );
-    expect(host.storedActivities).toHaveLength(0);
+    expect(result.created).toBe(1);
+    expect(result.importedFingerprints).toHaveLength(1);
+    expect(result.failedFingerprints).toHaveLength(1);
+    expect(result.fatal).toBeUndefined();
     expect(result.failures).toEqual([
       {
         sourceRowNumber: 2,
         message: 'Wealthfolio rejected this activity. Review the destination account and mapping.',
       },
     ]);
+    // The fake does not actually store the "valid" row when
+    // importValidationErrorCount is set; per-row outcome is the source of truth.
+    expect(host.storedActivities).toHaveLength(0);
   });
 
   it('submits the checked asset resolution through the import API', async () => {
@@ -324,5 +333,159 @@ describe('Revolut adapter: idempotent import flow', () => {
     await expect(prepareDrafts([buyDraft()], ['fp-1', 'fp-2'], [2])).rejects.toThrow(
       /length mismatch/,
     );
+  });
+
+  it('chunks a 300-row import and imports every row through multiple host calls', async () => {
+    const host = createFakeHost();
+    const drafts: ActivityDraft[] = Array.from({ length: 300 }, (_, i) =>
+      buyDraft({
+        date: `2024-01-${String((i % 28) + 1).padStart(2, '0')}T10:00:00Z`,
+        ticker: `SYM${i}`,
+        totalAmount: { currency: 'USD', amount: '1500' },
+      }),
+    );
+    const fps = Array.from({ length: 300 }, (_, i) => `fp-${i}`);
+    const rows = Array.from({ length: 300 }, (_, i) => i + 2);
+
+    const result = await runImport(host.api, 'acct-1', drafts, fps, rows, undefined, {
+      chunkSize: 100,
+    });
+
+    expect(result.attempted).toBe(300);
+    expect(result.created).toBe(300);
+    expect(result.failedFingerprints).toHaveLength(0);
+    expect(result.fatal).toBeUndefined();
+    expect(result.chunkSize).toBe(100);
+    expect(result.chunks).toHaveLength(3);
+    expect(result.chunks.every((c) => c.size === 100)).toBe(true);
+    expect(result.chunks.every((c) => c.imported === 100)).toBe(true);
+    expect(result.chunks.every((c) => c.failed === 0)).toBe(true);
+    expect(host.importCalls).toHaveLength(3);
+    expect(host.importCalls.every((c) => c.length === 100)).toBe(true);
+  });
+
+  it('survives a host payload-size cap by chunking the import', async () => {
+    const host = createFakeHost({ importBatchSizeLimit: 200 });
+    const drafts: ActivityDraft[] = Array.from({ length: 500 }, (_, i) =>
+      buyDraft({
+        date: `2024-01-${String((i % 28) + 1).padStart(2, '0')}T10:00:00Z`,
+        ticker: `SYM${i}`,
+        totalAmount: { currency: 'USD', amount: '1500' },
+      }),
+    );
+    const fps = Array.from({ length: 500 }, (_, i) => `fp-${i}`);
+    const rows = Array.from({ length: 500 }, (_, i) => i + 2);
+
+    const result = await runImport(host.api, 'acct-1', drafts, fps, rows, undefined, {
+      chunkSize: 100,
+    });
+
+    expect(result.attempted).toBe(500);
+    expect(result.created).toBe(500);
+    expect(result.fatal).toBeUndefined();
+    expect(result.failedFingerprints).toHaveLength(0);
+    expect(host.importCalls.length).toBeGreaterThanOrEqual(5);
+    expect(host.importCalls.every((c) => c.length <= 200)).toBe(true);
+  });
+
+  it('excludes already-imported fingerprints from later chunks across re-attempts', async () => {
+    const host = createFakeHost();
+    const drafts: ActivityDraft[] = Array.from({ length: 250 }, (_, i) =>
+      buyDraft({
+        date: `2024-01-${String((i % 28) + 1).padStart(2, '0')}T10:00:00Z`,
+        ticker: `SYM${i}`,
+        totalAmount: { currency: 'USD', amount: '1500' },
+      }),
+    );
+    const fps = Array.from({ length: 250 }, (_, i) => `fp-${i}`);
+    const rows = Array.from({ length: 250 }, (_, i) => i + 2);
+
+    // First run: succeeds, imports 250.
+    const result1 = await runImport(host.api, 'acct-1', drafts, fps, rows, undefined, {
+      chunkSize: 100,
+    });
+    expect(result1.created).toBe(250);
+    expect(result1.fatal).toBeUndefined();
+    expect(host.storedActivities.length).toBe(250);
+
+    // Second run: must dedupe via the host, returning 0 created, 250 skipped.
+    const result2 = await runImport(host.api, 'acct-1', drafts, fps, rows, undefined, {
+      chunkSize: 100,
+    });
+    expect(result2.created).toBe(0);
+    expect(result2.skippedDuplicates).toBe(250);
+    expect(result2.fatal).toBeUndefined();
+  });
+
+  it('a failed chunk produces per-row failures without a fatal when other chunks succeed', async () => {
+    // Host that fails the 2nd call only.
+    let callIndex = 0;
+    const host = createFakeHost();
+    const originalImport = host.api.activities.import as unknown as (
+      activities: ActivityImport[],
+    ) => Promise<unknown>;
+    (
+      host.api.activities as unknown as { import: (a: ActivityImport[]) => Promise<unknown> }
+    ).import = async (activities: ActivityImport[]) => {
+      callIndex++;
+      if (callIndex === 2) throw new Error('host 500: chunk rejected');
+      return originalImport(activities);
+    };
+    const drafts: ActivityDraft[] = Array.from({ length: 250 }, (_, i) =>
+      buyDraft({
+        date: `2024-01-${String((i % 28) + 1).padStart(2, '0')}T10:00:00Z`,
+        ticker: `SYM${i}`,
+        totalAmount: { currency: 'USD', amount: '1500' },
+      }),
+    );
+    const fps = Array.from({ length: 250 }, (_, i) => `fp-${i}`);
+    const rows = Array.from({ length: 250 }, (_, i) => i + 2);
+
+    const result = await runImport(host.api, 'acct-1', drafts, fps, rows, undefined, {
+      chunkSize: 100,
+    });
+
+    expect(result.fatal).toBeUndefined();
+    expect(result.created).toBe(150); // chunk 1 (100) + chunk 3 (50) succeed
+    expect(result.failedFingerprints).toHaveLength(100); // chunk 2 (100) failed
+    expect(result.failures.length).toBeGreaterThan(0);
+  });
+
+  it('chunks the import using the default chunk size when no options are passed', async () => {
+    const host = createFakeHost();
+    const drafts: ActivityDraft[] = Array.from({ length: 250 }, (_, i) =>
+      buyDraft({
+        date: `2024-01-${String((i % 28) + 1).padStart(2, '0')}T10:00:00Z`,
+        ticker: `SYM${i}`,
+        totalAmount: { currency: 'USD', amount: '1500' },
+      }),
+    );
+    const fps = Array.from({ length: 250 }, (_, i) => `fp-${i}`);
+    const rows = Array.from({ length: 250 }, (_, i) => i + 2);
+
+    const result = await runImport(host.api, 'acct-1', drafts, fps, rows);
+
+    expect(result.chunkSize).toBe(100);
+    expect(host.importCalls).toHaveLength(3);
+    expect(host.importCalls[0]).toHaveLength(100);
+    expect(host.importCalls[1]).toHaveLength(100);
+    expect(host.importCalls[2]).toHaveLength(50);
+  });
+
+  it('validates the chunkSize option is a positive integer', async () => {
+    const host = createFakeHost();
+    const drafts = [buyDraft()];
+    const fps = ['fp-1'];
+    const rows = [2];
+
+    await expect(
+      runImport(host.api, 'acct-1', drafts, fps, rows, undefined, { chunkSize: 0 }),
+    ).rejects.toThrow(/chunkSize must be a positive integer/);
+    await expect(
+      runImport(host.api, 'acct-1', drafts, fps, rows, undefined, { chunkSize: -1 }),
+    ).rejects.toThrow(/chunkSize must be a positive integer/);
+    await expect(
+      runImport(host.api, 'acct-1', drafts, fps, rows, undefined, { chunkSize: 1.5 }),
+    ).rejects.toThrow(/chunkSize must be a positive integer/);
   });
 });
