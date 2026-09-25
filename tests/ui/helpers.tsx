@@ -16,6 +16,7 @@ import { parseRevolutCsv } from '../../src/parser/parse-csv';
 import { validateBatch } from '../../src/validation/validate-batch';
 import { reconcile } from '../../src/reconciliation/reconcile';
 import { createFakeHost, type FakeHostOptions } from '../wealthfolio/fake-host';
+import type { ExistingActivityLike } from '../../src/duplicates/existing-match';
 
 export const GOOD_CSV = `Date,Ticker,Type,Quantity,Price per share,Total Amount,Currency,FX Rate
 2024-01-01T10:00:00.000000Z,,CASH TOP-UP,,,EUR 100.00,EUR,1.0000
@@ -65,6 +66,8 @@ export async function buildState(
     resolvedTickers?: boolean;
     acknowledged?: boolean;
     forceResidualFailure?: boolean;
+    /** Activities already on the account; omitted means "not loaded yet". */
+    existing?: ExistingActivityLike[];
   } = {},
 ): Promise<ImportState> {
   const {
@@ -73,6 +76,7 @@ export async function buildState(
     resolvedTickers = true,
     acknowledged = false,
     forceResidualFailure = false,
+    existing,
   } = options;
 
   const parsed = parseRevolutCsv(csv);
@@ -95,6 +99,9 @@ export async function buildState(
 
   if (accountId) {
     state = reducer(state, { type: 'SELECT_ACCOUNT', accountId });
+    if (existing) {
+      state = reducer(state, { type: 'EXISTING_ACTIVITIES_LOADED', accountId, existing });
+    }
   }
 
   if (resolvedTickers) {

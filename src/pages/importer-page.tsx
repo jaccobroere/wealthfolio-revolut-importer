@@ -47,6 +47,8 @@ import { validateBatch } from '../validation/validate-batch';
 import { uploadSummaryFromBatch } from '../state/import-state';
 import { reconcile } from '../reconciliation/reconcile';
 import { runImport } from '../wealthfolio/import';
+import { getActivities } from '../wealthfolio/api';
+import { toExistingActivities } from '../wealthfolio/existing-activities';
 import { identityToAsset, type CanonicalIdentity } from '../wealthfolio/symbol-mappings';
 import { UploadStep } from '../components/upload-step';
 import { MappingStep } from '../components/mapping-step';
@@ -88,6 +90,29 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
   const handleSelectAccount = useCallback((accountId: string) => {
     dispatch({ type: 'SELECT_ACCOUNT', accountId });
   }, []);
+
+  // Load what is already on the selected account for the "Already in
+  // Wealthfolio" preview. Non-fatal: the import re-checks against a fresh read.
+  const selectedAccountId = state.accountId;
+  useEffect(() => {
+    if (!selectedAccountId) return;
+    let cancelled = false;
+    getActivities(ctx.api, selectedAccountId)
+      .then((activities) => {
+        if (cancelled) return;
+        dispatch({
+          type: 'EXISTING_ACTIVITIES_LOADED',
+          accountId: selectedAccountId,
+          existing: toExistingActivities(activities),
+        });
+      })
+      .catch(() => {
+        // The preview stays in its loading state; import still re-checks.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ctx.api, selectedAccountId]);
 
   const handleTickersInitialized = useCallback((tickers: Readonly<Record<string, TickerEntry>>) => {
     dispatch({ type: 'TICKERS_INITIALIZED', tickers });
@@ -214,6 +239,9 @@ export function ImporterPage({ ctx, location }: ImporterPageProps) {
           attempted: result.attempted,
           created: result.created,
           skippedDuplicates: result.skippedDuplicates,
+          alreadyInAccount: result.alreadyInAccount,
+          alreadyInAccountUnlinked: result.alreadyInAccountUnlinked,
+          assetsCreated: result.assetsCreated,
           blocked: result.blocked,
           failed: result.failedFingerprints.length,
           failures: result.failures,
