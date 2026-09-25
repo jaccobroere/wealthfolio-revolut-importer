@@ -13,7 +13,12 @@ import { Button } from '@wealthfolio/ui';
 import { Card, CardContent, CardHeader, CardTitle } from '@wealthfolio/ui';
 import { RotateCcw } from 'lucide-react';
 import type { ImportState, ReviewFilter } from '../state/import-state';
-import { categoryCounts, filterOutcomes } from '../state/import-state';
+import {
+  categoryCounts,
+  computeAccountMatch,
+  filterOutcomes,
+  resolvedSecurityFor,
+} from '../state/import-state';
 import { countOverrides, type RowOverride } from '../domain/row-override';
 import { ReviewTable } from './review-table';
 
@@ -120,6 +125,8 @@ export function ReviewStep({
             outcomes={outcomes}
             sourceRows={state.sourceRows}
             overrides={state.overrides}
+            securityFor={(ticker) => resolvedSecurityFor(state, ticker)}
+            inAccount={computeAccountMatch(state)?.byRowIndex}
             onOverrideChange={onOverrideChange}
           />
         </div>

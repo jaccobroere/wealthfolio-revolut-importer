@@ -67,6 +67,9 @@ export interface PreparedDraft {
   sourceRowNumber: number;
   /** Resolved asset resolution input, when a confirmed mapping exists. */
   asset?: AssetResolutionInput;
+  /** 1-based occurrence among identical same-day activities (see
+   * `repeat-occurrence.ts`); 2+ get a numbered comment. */
+  occurrence?: number;
 }
 
 /** A persistence failure reported by Wealthfolio for one draft. */
@@ -103,6 +106,12 @@ export interface ImportFlowResult {
   failedFingerprints: string[];
   /** Rows skipped as exact duplicates of already-imported activities. */
   skippedDuplicates: number;
+  /** Of `skippedDuplicates`: rows matched on content to an account activity. */
+  alreadyInAccount: number;
+  /** Of `alreadyInAccount`: matched copies that have no security linked. */
+  alreadyInAccountUnlinked: number;
+  /** Securities created in Wealthfolio by seeding one of their rows. */
+  assetsCreated: number;
   /** Rows blocked from import (host validation errors, UNKNOWN type, or
    * unresolved symbols). */
   blocked: number;

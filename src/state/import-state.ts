@@ -29,6 +29,12 @@ import type { RevolutSourceRow } from '../domain/revolut-row';
 import type { RowOverride, RowOverrides } from '../domain/row-override';
 import type { ReconciliationReport } from '../domain/reconciliation';
 import type { CanonicalIdentity } from '../wealthfolio/symbol-mappings';
+import {
+  matchExistingActivities,
+  type ExistingActivityLike,
+  type ExistingMatch,
+  type ExistingMatchReport,
+} from '../duplicates/existing-match';
 
 /** The six wizard states. `importing` and `done` are transient/terminal. */
 export type WizardStep = 'upload' | 'mapping' | 'review' | 'reconcile' | 'importing' | 'done';
@@ -97,6 +103,12 @@ export interface ImportSummary {
   readonly attempted: number;
   readonly created: number;
   readonly skippedDuplicates: number;
+  /** Of `skippedDuplicates`: rows matched to an activity already on the account. */
+  readonly alreadyInAccount?: number;
+  /** Of `alreadyInAccount`: matched copies with no security linked. */
+  readonly alreadyInAccountUnlinked?: number;
+  /** Securities created in Wealthfolio for this import. */
+  readonly assetsCreated?: number;
   readonly blocked: number;
   readonly failed: number;
   /** Safe, row-level persistence errors from Wealthfolio's bulk API. */
@@ -143,6 +155,8 @@ export interface ImportState {
   readonly tickers: Readonly<Record<string, TickerEntry>>;
   /** Duplicate fingerprints detected within the uploaded file. */
   readonly duplicateFingerprints: ReadonlySet<string>;
+  /** Activities already on the selected account, or null until loaded. */
+  readonly existingActivities: readonly ExistingActivityLike[] | null;
   /** Reconciliation report (computed in reconcile step). */
   readonly reconciliation: ReconciliationReport | null;
   /** User acknowledgement checkbox. */
@@ -172,6 +186,7 @@ export const INITIAL_STATE: ImportState = {
   filter: 'all',
   importSummary: null,
   error: null,
+  existingActivities: null,
 };
 
 // --- Actions -----------------------------------------------------------------
@@ -188,6 +203,7 @@ export type Action =
   | { type: 'GOTO'; step: WizardStep }
   | { type: 'ACCOUNTS_LOADED'; accounts: readonly Account[] }
   | { type: 'SELECT_ACCOUNT'; accountId: string }
+  | { type: 'EXISTING_ACTIVITIES_LOADED'; accountId: string; existing: ExistingActivityLike[] }
   | {
       type: 'TICKERS_INITIALIZED';
       tickers: Readonly<Record<string, TickerEntry>>;
@@ -255,8 +271,14 @@ export function reducer(state: ImportState, action: Action): ImportState {
         ...state,
         accountId: action.accountId,
         tickers: resetTickerResolutions(state.tickers),
+        existingActivities: null,
         acknowledged: false,
       };
+
+    case 'EXISTING_ACTIVITIES_LOADED':
+      // Ignore a late response for an account that is no longer selected.
+      if (action.accountId !== state.accountId) return state;
+      return { ...state, existingActivities: action.existing };
 
     case 'TICKERS_INITIALIZED':
       return { ...state, tickers: action.tickers, acknowledged: false };
@@ -549,7 +571,7 @@ export function blockingReasons(state: ImportState): string[] {
  * - `ignored`    — rows the reviewer explicitly excluded (never imported).
  * - `errors`     — unknown or invalid rows (fatal, block Import).
  * - `duplicates` — imported rows whose fingerprint collides with an earlier
- *                  row in the same file.
+ *                  row in the same file, or that are already on the account.
  * - `cash`       — DEPOSIT / WITHDRAWAL.
  * - `trades`     — BUY / SELL.
  * - `dividends`  — DIVIDEND.
@@ -564,12 +586,15 @@ export function categorize(
   duplicateFingerprints: ReadonlySet<string>,
   fingerprints: readonly string[],
   roundingVariances: ReadonlyMap<number, string>,
+  inAccount?: ReadonlyMap<number, ExistingMatch>,
 ): ReviewFilter {
   if (outcome.kind === 'ignored') return 'ignored';
   if (outcome.kind === 'unknown' || outcome.kind === 'invalid') return 'errors';
   if (outcome.kind !== 'imported' || !outcome.draft) return 'errors';
   const fp = fingerprints[outcome.rowIndex - 1] ?? '';
   if (fp && duplicateFingerprints.has(fp)) return 'duplicates';
+  const match = inAccount?.get(outcome.rowIndex);
+  if (match && match.kind !== 'new') return 'duplicates';
   if (roundingVariances.has(outcome.rowIndex)) return 'warnings';
   switch (outcome.draft.activityType) {
     case 'BUY':
@@ -598,9 +623,10 @@ export function filterOutcomes(state: ImportState): readonly RowOutcome[] {
   const rounding = new Map<number, string>(
     (state.reconciliation?.tradeRoundingVariances ?? []).map((v) => [v.rowIndex, v.variance]),
   );
+  const inAccount = computeAccountMatch(state)?.byRowIndex;
   return outcomes.filter(
     (o) =>
-      categorize(o, state.duplicateFingerprints, state.batch!.fingerprints, rounding) ===
+      categorize(o, state.duplicateFingerprints, state.batch!.fingerprints, rounding, inAccount) ===
       state.filter,
   );
 }
@@ -622,8 +648,15 @@ export function categoryCounts(state: ImportState): Record<ReviewFilter, number>
   const rounding = new Map<number, string>(
     (state.reconciliation?.tradeRoundingVariances ?? []).map((v) => [v.rowIndex, v.variance]),
   );
+  const inAccount = computeAccountMatch(state)?.byRowIndex;
   for (const o of state.batch.outcomes) {
-    const cat = categorize(o, state.duplicateFingerprints, state.batch.fingerprints, rounding);
+    const cat = categorize(
+      o,
+      state.duplicateFingerprints,
+      state.batch.fingerprints,
+      rounding,
+      inAccount,
+    );
     counts[cat]++;
     counts.all++;
   }
@@ -682,4 +715,58 @@ export function uploadSummaryFromBatch(
     minDate: dates[0],
     maxDate: dates[dates.length - 1],
   };
+}
+
+/** The reviewed Wealthfolio security for a ticker, once its mapping is resolved. */
+export interface ResolvedSecurity {
+  symbol: string;
+  exchangeMic?: string;
+  name?: string;
+}
+
+/** Resolved security for a source ticker, if confirmed. */
+export function resolvedSecurityFor(
+  state: Pick<ImportState, 'tickers'>,
+  ticker: string,
+): ResolvedSecurity | undefined {
+  const entry = state.tickers[ticker.trim().toUpperCase()] ?? state.tickers[ticker];
+  if (entry?.resolution.status !== 'resolved') return undefined;
+  const id = entry.resolution.identity;
+  return {
+    symbol: id.symbol,
+    ...(id.exchangeMic ? { exchangeMic: id.exchangeMic } : {}),
+  };
+}
+
+/** Match of the batch against the account, keyed by 1-based source row. */
+export interface AccountMatch {
+  report: ExistingMatchReport;
+  byRowIndex: ReadonlyMap<number, ExistingMatch>;
+}
+
+/**
+ * Match the importable rows against the activities already on the selected
+ * account. Null until both a batch and the account's activities are loaded.
+ * The import flow re-runs the same match against a fresh read before writing.
+ */
+export function computeAccountMatch(state: ImportState): AccountMatch | null {
+  if (!state.batch || !state.existingActivities) return null;
+  const { drafts, sourceRowNumbers } = buildImportPayload(state.batch);
+  const report = matchExistingActivities(
+    drafts.map((d) => ({
+      activityType: d.activityType as Exclude<ActivityDraft['activityType'], 'UNKNOWN'>,
+      date: d.date,
+      quantity: d.quantity ?? '',
+      unitPrice: d.unitPrice?.amount ?? '',
+      amount: d.totalAmount.amount,
+      currency: d.currency,
+      ...(d.ticker
+        ? { assetSymbol: resolvedSecurityFor(state, d.ticker)?.symbol ?? d.ticker }
+        : {}),
+    })),
+    state.existingActivities,
+  );
+  const byRowIndex = new Map<number, ExistingMatch>();
+  report.matches.forEach((m, i) => byRowIndex.set(sourceRowNumbers[i]!, m));
+  return { report, byRowIndex };
 }

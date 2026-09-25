@@ -20,7 +20,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@wealthfolio/ui';
 import { Checkbox } from '@wealthfolio/ui';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@wealthfolio/ui';
 import type { ImportState } from '../state/import-state';
-import { blockingReasons, canImport } from '../state/import-state';
+import {
+  blockingReasons,
+  canImport,
+  computeAccountMatch,
+  resolvedSecurityFor,
+} from '../state/import-state';
+import type { ExistingActivityLike, ExistingMatchReport } from '../duplicates/existing-match';
 import { countOverrides } from '../domain/row-override';
 
 export interface ReconciliationPanelProps {
@@ -40,6 +46,12 @@ export function ReconciliationPanel({
   const enabled = canImport(state);
   const reasons = blockingReasons(state);
   const overrides = countOverrides(state.overrides);
+  const accountMatch = computeAccountMatch(state);
+  const alreadyInAccount = accountMatch
+    ? accountMatch.report.counts.existing + accountMatch.report.counts.existingUnlinked
+    : 0;
+  const toWrite = accountMatch ? accountMatch.report.counts.new : report?.accountedRows;
+  const unlinkedOnly = accountMatch ? unlinkedOnlyMatches(state, accountMatch.report) : [];
 
   return (
     <Card>
@@ -92,6 +104,53 @@ export function ReconciliationPanel({
           <p className="text-muted-foreground text-sm">Reconciliation not yet computed.</p>
         )}
 
+        <Section title="Already in Wealthfolio">
+          <div data-testid="account-match" className="space-y-2">
+            {accountMatch === null ? (
+              <p className="text-muted-foreground text-sm">
+                Checking the activities already on this account…
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+                  <Stat label="New activities" value={accountMatch.report.counts.new} />
+                  <Stat label="Already in account (skipped)" value={alreadyInAccount} />
+                  <Stat
+                    label="Stored without security"
+                    value={accountMatch.report.counts.existingUnlinked}
+                    warn={accountMatch.report.counts.existingUnlinked > 0}
+                  />
+                  <Stat
+                    label="Extra copies in account"
+                    value={accountMatch.report.counts.extraCopies}
+                    warn={accountMatch.report.counts.extraCopies > 0}
+                  />
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  Matched on type, day, currency and amount (quantity for trades), so a newer full
+                  export only adds what is new.
+                </p>
+                {accountMatch.report.extraCopies.length > 0 ? (
+                  <AccountActivityList
+                    testId="extra-copies"
+                    title={`${accountMatch.report.extraCopies.length} extra cop${accountMatch.report.extraCopies.length === 1 ? 'y' : 'ies'} of activities in this statement`}
+                    explanation="These duplicate an activity that is already in Wealthfolio, usually left behind by an earlier import. They inflate your cash and holdings. Delete them in Wealthfolio's Activities page; this import will not touch them."
+                    activities={accountMatch.report.extraCopies}
+                  />
+                ) : null}
+                {unlinkedOnly.length > 0 ? (
+                  <AccountActivityList
+                    testId="unlinked-matches"
+                    title={`${unlinkedOnly.length} activit${unlinkedOnly.length === 1 ? 'y is' : 'ies are'} in Wealthfolio without a security`}
+                    explanation="An earlier add-on version stored these before their security existed, so they move cash but not holdings. This import will not add them again. To repair them, delete them in Wealthfolio and run this import again: they will be re-created linked to their security."
+                    activities={unlinkedOnly}
+                  />
+                ) : null}
+              </>
+            )}
+          </div>
+        </Section>
+
         {overrides.ignored + overrides.edited > 0 ? (
           <div
             className="space-y-1 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm"
@@ -131,7 +190,7 @@ export function ReconciliationPanel({
           />
           <label htmlFor="revolut-acknowledge" className="text-sm">
             I have reviewed the reconciliation and confirm the net position and cash movements are
-            correct. I understand import will write these activities to the selected account.
+            correct. {writeSummary(toWrite, alreadyInAccount)}
           </label>
         </div>
 
@@ -153,7 +212,7 @@ export function ReconciliationPanel({
             Back
           </Button>
           <Button disabled={!enabled} onClick={onImport} data-testid="import-button">
-            Import {report ? `(${report.accountedRows} rows)` : ''}
+            Import {toWrite !== undefined ? `(${toWrite} new)` : ''}
           </Button>
         </div>
       </CardContent>
@@ -179,7 +238,7 @@ function PositionsTable({ state }: { state: ImportState }) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Ticker</TableHead>
+          <TableHead>Security</TableHead>
           <TableHead className="text-right">Bought</TableHead>
           <TableHead className="text-right">Sold</TableHead>
           <TableHead className="text-right">Net</TableHead>
@@ -189,7 +248,9 @@ function PositionsTable({ state }: { state: ImportState }) {
       <TableBody>
         {positions.map((p) => (
           <TableRow key={p.ticker}>
-            <TableCell className="font-medium">{p.ticker}</TableCell>
+            <TableCell>
+              <SecurityCell ticker={p.ticker} state={state} />
+            </TableCell>
             <TableCell className="font-mono text-right">{p.bought}</TableCell>
             <TableCell className="font-mono text-right">{p.sold}</TableCell>
             <TableCell className="font-mono text-right">{p.net}</TableCell>
@@ -311,3 +372,117 @@ function RoundingTable({ state }: { state: ImportState }) {
 }
 
 export default ReconciliationPanel;
+
+/** Mapped Wealthfolio ticker · exchange, with the Revolut ticker underneath. */
+function SecurityCell({ ticker, state }: { ticker: string; state: ImportState }) {
+  const resolved = resolvedSecurityFor(state, ticker);
+  return (
+    <span className="inline-flex flex-col" data-testid="security-label">
+      {resolved ? (
+        <span className="font-mono text-xs">
+          <span className="font-semibold">{resolved.symbol}</span>
+          {resolved.exchangeMic ? (
+            <span className="text-muted-foreground"> · {resolved.exchangeMic}</span>
+          ) : null}
+        </span>
+      ) : (
+        <span className="font-mono text-xs text-destructive">{ticker} (unmapped)</span>
+      )}
+      {resolved ? <span className="text-muted-foreground text-xs">Revolut: {ticker}</span> : null}
+    </span>
+  );
+}
+
+function Stat({ label, value, warn }: { label: string; value: number; warn?: boolean }) {
+  return (
+    <div className="rounded border px-2 py-1.5">
+      <p className="text-muted-foreground text-xs">{label}</p>
+      <p className={`font-mono ${warn ? 'text-destructive' : ''}`}>{value}</p>
+    </div>
+  );
+}
+
+/** "I understand this will write …" completion for the acknowledgement. */
+function writeSummary(toWrite: number | undefined, skipped: number): string {
+  if (toWrite === undefined) {
+    return 'I understand import will write these activities to the selected account.';
+  }
+  const noun = toWrite === 1 ? 'activity' : 'activities';
+  const skip =
+    skipped > 0 ? ` and skip ${skipped} that ${skipped === 1 ? 'is' : 'are'} already there` : '';
+  return `I understand this will write ${toWrite} new ${noun} to the selected account${skip}.`;
+}
+
+/** Unlinked account copies that are the only copy of a statement activity. */
+function unlinkedOnlyMatches(
+  state: ImportState,
+  report: ExistingMatchReport,
+): ExistingActivityLike[] {
+  const byId = new Map((state.existingActivities ?? []).map((e) => [e.id, e]));
+  const out: ExistingActivityLike[] = [];
+  for (const m of report.matches) {
+    if (m.kind !== 'existing-unlinked') continue;
+    const e = byId.get(m.existingId);
+    if (e) out.push(e);
+  }
+  return out;
+}
+
+function formatDay(date: string | Date): string {
+  const d = date instanceof Date ? date : new Date(date);
+  return Number.isNaN(d.getTime()) ? '—' : d.toISOString().slice(0, 10);
+}
+
+function AccountActivityList({
+  testId,
+  title,
+  explanation,
+  activities,
+}: {
+  testId: string;
+  title: string;
+  explanation: string;
+  activities: readonly ExistingActivityLike[];
+}) {
+  return (
+    <div
+      className="space-y-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm"
+      data-testid={testId}
+    >
+      <p className="font-medium">{title}</p>
+      <p className="text-muted-foreground text-xs">{explanation}</p>
+      <div className="max-h-64 overflow-auto rounded-md border bg-background">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Security in Wealthfolio</TableHead>
+              <TableHead className="text-right">Quantity</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {activities.map((e) => (
+              <TableRow key={e.id}>
+                <TableCell className="font-mono text-xs">{formatDay(e.date)}</TableCell>
+                <TableCell className="text-xs">{e.activityType}</TableCell>
+                <TableCell className="text-xs">
+                  {e.assetSymbol ? (
+                    <span className="font-mono">{e.assetSymbol}</span>
+                  ) : (
+                    <span className="text-destructive">none</span>
+                  )}
+                </TableCell>
+                <TableCell className="font-mono text-right text-xs">{e.quantity ?? '—'}</TableCell>
+                <TableCell className="font-mono text-right text-xs">
+                  {e.amount ?? '—'} {e.currency}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}

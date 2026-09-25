@@ -18,6 +18,8 @@ import type { RowOutcome } from '../domain/import-outcome';
 import type { RevolutSourceRow } from '../domain/revolut-row';
 import type { RowOverride, RowOverrides } from '../domain/row-override';
 import { RowEditor } from './row-editor';
+import type { ResolvedSecurity } from '../state/import-state';
+import type { ExistingMatch } from '../duplicates/existing-match';
 
 export interface ReviewTableProps {
   outcomes: readonly RowOutcome[];
@@ -27,9 +29,13 @@ export interface ReviewTableProps {
   overrides: RowOverrides;
   /** Set (or clear, with `null`) the decision for one source row. */
   onOverrideChange: (rowIndex: number, override: RowOverride | null) => void;
+  /** Reviewed Wealthfolio security for a Revolut ticker, once resolved. */
+  securityFor?: (ticker: string) => ResolvedSecurity | undefined;
+  /** Rows already on the destination account, keyed by source row. */
+  inAccount?: ReadonlyMap<number, ExistingMatch>;
 }
 
-const COLUMN_COUNT = 9;
+const COLUMN_COUNT = 10;
 
 const KIND_LABEL: Record<RowOutcome['kind'], string> = {
   imported: 'Valid',
@@ -50,6 +56,8 @@ export function ReviewTable({
   sourceRows,
   overrides,
   onOverrideChange,
+  securityFor,
+  inAccount,
 }: ReviewTableProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
 
@@ -65,6 +73,7 @@ export function ReviewTable({
           <TableHead className="w-32">Source type</TableHead>
           <TableHead className="w-24">Activity</TableHead>
           <TableHead className="w-24">Status</TableHead>
+          <TableHead>Security</TableHead>
           <TableHead>Date</TableHead>
           <TableHead className="w-24">Quantity</TableHead>
           <TableHead>Amount</TableHead>
@@ -109,6 +118,25 @@ export function ReviewTable({
                     Edited
                   </span>
                 ) : null}
+                {inAccount?.get(o.rowIndex)?.kind === 'existing' ? (
+                  <span
+                    className="ml-1 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                    data-testid={`review-in-account-${o.rowIndex}`}
+                  >
+                    Already imported
+                  </span>
+                ) : inAccount?.get(o.rowIndex)?.kind === 'existing-unlinked' ? (
+                  <span
+                    className="ml-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                    title="The copy in Wealthfolio has no security linked"
+                    data-testid={`review-in-account-${o.rowIndex}`}
+                  >
+                    Imported, no security
+                  </span>
+                ) : null}
+              </TableCell>
+              <TableCell className="text-xs">
+                <SecurityCell ticker={o.draft?.ticker ?? ''} securityFor={securityFor} />
               </TableCell>
               <TableCell className="text-xs">{o.draft?.date.slice(0, 10) ?? '—'}</TableCell>
               <TableCell className="font-mono text-xs">{o.draft?.quantity ?? '—'}</TableCell>
@@ -135,6 +163,32 @@ export function ReviewTable({
         })}
       </TableBody>
     </Table>
+  );
+}
+
+/** Mapped Wealthfolio ticker · exchange, with the Revolut ticker underneath. */
+function SecurityCell({
+  ticker,
+  securityFor,
+}: {
+  ticker: string;
+  securityFor?: (ticker: string) => ResolvedSecurity | undefined;
+}) {
+  if (!ticker) return <span className="text-muted-foreground">Cash</span>;
+  const resolved = securityFor?.(ticker);
+  if (!resolved) return <span className="font-mono">{ticker}</span>;
+  return (
+    <span className="inline-flex flex-col" data-testid="security-label">
+      <span className="font-mono">
+        <span className="font-semibold">{resolved.symbol}</span>
+        {resolved.exchangeMic ? (
+          <span className="text-muted-foreground"> · {resolved.exchangeMic}</span>
+        ) : null}
+      </span>
+      {resolved.symbol !== ticker ? (
+        <span className="text-muted-foreground">Revolut: {ticker}</span>
+      ) : null}
+    </span>
   );
 }
 

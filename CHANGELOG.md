@@ -5,6 +5,24 @@ notes live under [`docs/releases/`](docs/releases/).
 
 ## Unreleased
 
+## 0.5.0 — 2026-09-25
+
+- Fixed: re-importing a full history re-added activities. Rows are now matched
+  against the destination account on type, day, currency and value before
+  writing; host-reported duplicates are still honored.
+- Fixed: activities for a ticker Wealthfolio did not know yet were stored
+  without a security (the 3.6.1 import endpoint never creates assets). The
+  importer seeds the security through `activities.saveMany` and links the
+  remaining activities to it. Adds the `activities.saveMany` permission.
+- Fixed: identical same-day activities (e.g. equal top-ups, or equal
+  commission refunds on different tickers) were collapsed by Wealthfolio's
+  day-level duplicate key. Repeats now carry a numbered comment.
+- Fixed: trades are sent with `Total Amount ÷ Quantity` as unit price, and the
+  source `FX Rate` is no longer forwarded; both made Wealthfolio's cash totals
+  drift from the statement.
+- Added: an _Already in Wealthfolio_ section in the reconcile step, a security
+  column in the review table, and mapped tickers in the net-position table.
+
 ## 0.4.0 — 2026-09-15
 
 - Added: fix problem rows in the review step instead of editing the CSV. Any

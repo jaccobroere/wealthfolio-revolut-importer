@@ -16,6 +16,8 @@ import type {
 } from '@wealthfolio/addon-sdk';
 
 import type { ActivityDraft } from '../domain/activity-draft';
+import { occurrenceComment } from '../duplicates/repeat-occurrence';
+import { effectiveUnitPrice } from '../mapping/effective-price';
 import type { ActivityMetadataV1, PreparedDraft } from './types';
 import { IMPORTER_ID, IMPORTER_VERSION, SOURCE_SCHEMA_VERSION, SOURCE_TYPE } from './types';
 
@@ -97,10 +99,20 @@ export function toActivityImport(prepared: PreparedDraft, accountId: string): Ac
     // Wealthfolio uses to resolve the reviewed asset during checkImport.
     symbol: isCash ? '' : (asset?.symbol ?? draft.ticker),
     quantity: draft.quantity || undefined,
-    unitPrice: draft.unitPrice?.amount || undefined,
+    // Cash-consistent price (Total Amount ÷ Quantity) for trades; see
+    // `effective-price.ts`. The displayed price stays on the draft.
+    unitPrice: effectiveUnitPrice(draft),
     amount: draft.totalAmount.amount || undefined,
     currency: draft.currency,
-    fxRate: draft.fxRate || undefined,
+    // Revolut's `FX Rate` is deliberately not forwarded. Verified against a
+    // 3.6.1 host: Wealthfolio reads an activity's fxRate in the opposite
+    // direction and books the trade's cash in the account currency at that
+    // rate, so USD cash and EUR cash both drift. Without it the host keeps
+    // cash in the activity currency and converts with its own FX data.
+    // The source rate stays on the draft for review and reconciliation.
+    // Only repeats of an identical same-day activity carry a comment, so
+    // Wealthfolio's day-level duplicate key keeps each of them.
+    comment: occurrenceComment(prepared.occurrence ?? 1),
     // Asset resolution hints, when a confirmed mapping exists.
     exchangeMic: asset?.exchangeMic,
     quoteCcy: asset?.quoteCcy,

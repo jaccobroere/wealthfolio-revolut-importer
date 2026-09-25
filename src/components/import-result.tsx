@@ -70,7 +70,22 @@ export function ImportResult({ summary, onReset, onReviewMappings }: ImportResul
             label={hasFatal ? 'Batch status' : 'Failed'}
             value={hasFatal ? 'Not written' : summary.failed}
           />
+          {summary.alreadyInAccount !== undefined ? (
+            <Stat label="Already in account" value={summary.alreadyInAccount} />
+          ) : null}
+          {summary.assetsCreated ? (
+            <Stat label="Securities created" value={summary.assetsCreated} />
+          ) : null}
         </div>
+
+        {summary.alreadyInAccountUnlinked ? (
+          <p className="text-muted-foreground text-sm" data-testid="unlinked-note">
+            {summary.alreadyInAccountUnlinked} activit
+            {summary.alreadyInAccountUnlinked === 1 ? 'y was' : 'ies were'} already in Wealthfolio
+            without a security and {summary.alreadyInAccountUnlinked === 1 ? 'was' : 'were'} not
+            added again. The reconcile step lists them so you can repair them.
+          </p>
+        ) : null}
 
         <p className="text-muted-foreground text-sm">
           {hasFatal
