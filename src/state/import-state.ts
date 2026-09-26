@@ -59,9 +59,9 @@ export type ReviewFilter =
 export type TickerResolution =
   | { status: 'pending' }
   | { status: 'no-results' }
-  | { status: 'candidates'; results: SymbolSearchResult[] }
+  | { status: 'candidates'; results: SymbolSearchResult[]; anchorName?: string }
   /** A remembered account mapping is stale; current choices are reviewable. */
-  | { status: 'stale'; results: SymbolSearchResult[] }
+  | { status: 'stale'; results: SymbolSearchResult[]; anchorName?: string }
   | { status: 'blocked'; reason: string }
   | { status: 'resolved'; identity: CanonicalIdentity; fromSaved: boolean };
 
@@ -71,6 +71,8 @@ export interface TickerEntry {
   readonly ticker: string;
   /** 1-based source row numbers that reference this ticker. */
   readonly rowIndices: readonly number[];
+  /** Currency of this ticker's buys/sells (most frequent), else any row's. */
+  readonly tradedCurrency?: string;
   /** Current resolution. */
   readonly resolution: TickerResolution;
 }
@@ -670,24 +672,25 @@ export function categoryCounts(state: ImportState): Record<ReviewFilter, number>
  */
 export function buildTickerEntries(batch: BatchResult): Record<string, TickerEntry> {
   const entries: Record<string, TickerEntry> = {};
+  const tallies = new Map<string, { trade: Map<string, number>; any: string }>();
   for (const outcome of batch.outcomes) {
     if (outcome.kind !== 'imported' || !outcome.draft) continue;
     const draft: ActivityDraft = outcome.draft;
     if (!draft.ticker) continue;
     const ticker = draft.ticker;
-    const existing = entries[ticker];
-    if (existing) {
-      entries[ticker] = {
-        ...existing,
-        rowIndices: [...existing.rowIndices, outcome.rowIndex],
-      };
-    } else {
-      entries[ticker] = {
-        ticker,
-        rowIndices: [outcome.rowIndex],
-        resolution: { status: 'pending' },
-      };
+    const tally = tallies.get(ticker) ?? { trade: new Map<string, number>(), any: draft.currency };
+    if (draft.activityType === 'BUY' || draft.activityType === 'SELL') {
+      tally.trade.set(draft.currency, (tally.trade.get(draft.currency) ?? 0) + 1);
     }
+    tallies.set(ticker, tally);
+    const existing = entries[ticker];
+    entries[ticker] = existing
+      ? { ...existing, rowIndices: [...existing.rowIndices, outcome.rowIndex] }
+      : { ticker, rowIndices: [outcome.rowIndex], resolution: { status: 'pending' } };
+  }
+  for (const [ticker, tally] of tallies) {
+    const top = [...tally.trade].sort((x, y) => y[1] - x[1])[0]?.[0];
+    entries[ticker] = { ...entries[ticker]!, tradedCurrency: top ?? tally.any };
   }
   return entries;
 }

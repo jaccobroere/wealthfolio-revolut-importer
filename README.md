@@ -39,7 +39,9 @@ See the complete [installation guide](docs/INSTALL.md).
 
 1. Export the investment CSV from Revolut.
 2. Select the file and the Wealthfolio account that should receive the data.
-3. Review every ticker and confirm its Wealthfolio instrument mapping.
+3. Review every ticker and confirm the listing you hold. Listings are ranked by instrument, then
+   the currency you traded in, then your preferred exchanges (editable, saved per account). You
+   can search any other ticker or name, and accept all suggested listings in one click.
 4. Inspect validation, duplicate, rounding, and reconciliation messages.
 5. Import only after the review is complete.
 
@@ -50,7 +52,8 @@ new reconciliation acknowledgement. If Wealthfolio rejects a draft, the
 importer shows safe row-level diagnostics without exposing statement data.
 If Wealthfolio no longer recognizes a remembered mapping, the mapping step
 shows its current choices so you can replace or remove the stale mapping; it
-never leaves the import blocked without a recovery action.
+never leaves the import blocked without a recovery action. "Forget remembered
+mappings" clears every mapping this importer saved for the selected account.
 
 ## Supported CSV content
 
