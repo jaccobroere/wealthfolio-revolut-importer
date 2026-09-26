@@ -114,8 +114,7 @@ describe('Revolut importer page', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Destination account')).toHaveValue('acct-1');
       });
-      fireEvent.click(await screen.findByRole('button', { name: 'Search now' }));
-
+      // Tickers are searched automatically once the account is selected.
       expect(
         await screen.findByText(/remembered mapping for this account no longer matches/i),
       ).toBeInTheDocument();

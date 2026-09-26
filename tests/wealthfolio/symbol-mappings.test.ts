@@ -13,6 +13,10 @@ import { describe, expect, it } from 'vitest';
 import type { ImportMappingData, SymbolSearchResult } from '@wealthfolio/addon-sdk';
 
 import {
+  countSavedMappings,
+  readPreferredExchanges,
+  withPreferredExchanges,
+  withoutAllSavedMappings,
   identityToAsset,
   readSavedMappings,
   resolveSymbol,
@@ -194,5 +198,34 @@ describe('Revolut adapter: symbol mappings', () => {
     expect(updated.symbolMappings[`${IMPORTER_ID}::MSFT`]).toBeDefined();
     expect(updated.symbolMappings['degiro-importer::AAPL']).toBeDefined();
     expect(original.symbolMappings[`${IMPORTER_ID}::AAPL`]).toBeDefined();
+  });
+});
+
+describe('account-level mapping maintenance', () => {
+  const doc = {
+    accountId: 'acct-1',
+    fieldMappings: { other: 'x' },
+    activityMappings: {},
+    accountMappings: {},
+    symbolMappings: {
+      'revolut-importer::SYNA': JSON.stringify({ symbol: 'SYNA', exchangeMic: 'XAMS' }),
+      'revolut-importer::SYNB': JSON.stringify({ symbol: 'SYNB', exchangeMic: 'XNAS' }),
+      'degiro-importer::IE00SYN00001': JSON.stringify({ symbol: 'SYNC' }),
+    },
+  };
+
+  it('forgets every mapping of this add-on and keeps other importers’', () => {
+    expect(countSavedMappings(doc)).toBe(2);
+    const cleared = withoutAllSavedMappings(doc);
+    expect(countSavedMappings(cleared)).toBe(0);
+    expect(Object.keys(cleared.symbolMappings)).toEqual(['degiro-importer::IE00SYN00001']);
+    expect(cleared.fieldMappings).toEqual({ other: 'x' });
+  });
+
+  it('round-trips the preferred exchanges without touching other fields', () => {
+    expect(readPreferredExchanges(doc)).toBeUndefined();
+    const saved = withPreferredExchanges(doc, ['XETR', 'XAMS']);
+    expect(readPreferredExchanges(saved)).toEqual(['XETR', 'XAMS']);
+    expect(saved.fieldMappings.other).toBe('x');
   });
 });
