@@ -16,7 +16,7 @@
  * Privacy: shows the normalized source ticker and the resolved canonical
  * identity only. Never displays raw rows or balances.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@wealthfolio/ui';
 import { Button } from '@wealthfolio/ui';
 import { Card, CardContent, CardHeader, CardTitle } from '@wealthfolio/ui';
@@ -46,6 +46,7 @@ import {
   type RankedListing,
 } from '../mapping/listing-choice';
 import { IMPORTER_ID } from '../wealthfolio/types';
+import { MappingPersistence } from '../wealthfolio/mapping-persistence';
 
 export interface MappingStepProps {
   api: HostAPI;
@@ -85,6 +86,7 @@ export function MappingStep({
   ]);
   const [rememberedCount, setRememberedCount] = useState(0);
   const [accepting, setAccepting] = useState(false);
+  const mappingPersistence = useRef(new MappingPersistence(api, IMPORTER_ID));
 
   // Initialize ticker entries once the batch is available.
   useEffect(() => {
@@ -165,9 +167,9 @@ export function MappingStep({
     if (!accountId) return;
     setPersistError(null);
     try {
-      const current = await api.activities.getImportMapping(accountId, IMPORTER_ID);
-      const updated = withSavedMapping(current, ticker, identity);
-      await api.activities.saveImportMapping(updated);
+      const updated = await mappingPersistence.current.update(accountId, (mapping) =>
+        withSavedMapping(mapping, ticker, identity),
+      );
       setSavedMappings(readSavedMappings(updated));
       setRememberedCount(countSavedMappings(updated));
     } catch {
@@ -179,9 +181,9 @@ export function MappingStep({
     if (!accountId) return;
     setPersistError(null);
     try {
-      const current = await api.activities.getImportMapping(accountId, IMPORTER_ID);
-      const updated = withoutSavedMapping(current, ticker);
-      await api.activities.saveImportMapping(updated);
+      const updated = await mappingPersistence.current.update(accountId, (mapping) =>
+        withoutSavedMapping(mapping, ticker),
+      );
       setSavedMappings(readSavedMappings(updated));
       setRememberedCount(countSavedMappings(updated));
       onTickerResolutionSet(
@@ -298,9 +300,12 @@ export function MappingStep({
         accepted.push([entry.ticker, identity]);
       }
       if (accepted.length === 0) return;
-      const current = await api.activities.getImportMapping(accountId, IMPORTER_ID);
-      const updated = accepted.reduce((m, [t, id]) => withSavedMapping(m, t, id), current);
-      await api.activities.saveImportMapping(updated);
+      const updated = await mappingPersistence.current.update(accountId, (mapping) =>
+        accepted.reduce(
+          (next, [ticker, identity]) => withSavedMapping(next, ticker, identity),
+          mapping,
+        ),
+      );
       setSavedMappings(readSavedMappings(updated));
       setRememberedCount(countSavedMappings(updated));
     } catch {
@@ -312,12 +317,23 @@ export function MappingStep({
 
   async function handleForgetAll(): Promise<void> {
     if (!accountId) return;
-    const current = await api.activities.getImportMapping(accountId, IMPORTER_ID);
-    await api.activities.saveImportMapping(withoutAllSavedMappings(current));
-    setSavedMappings(new Map());
-    setRememberedCount(0);
-    for (const entry of Object.values(tickers)) {
-      onTickerResolutionSet(entry.ticker, { status: 'pending' });
+    setPersistError(null);
+    try {
+      const verified = await mappingPersistence.current.updateAndRead(
+        accountId,
+        withoutAllSavedMappings,
+      );
+      if (countSavedMappings(verified) !== 0) {
+        setPersistError('Wealthfolio did not clear the remembered mappings. Nothing was reset.');
+        return;
+      }
+      setSavedMappings(new Map());
+      setRememberedCount(0);
+      for (const entry of Object.values(tickers)) {
+        onTickerResolutionSet(entry.ticker, { status: 'pending' });
+      }
+    } catch {
+      setPersistError('Wealthfolio could not clear the remembered mappings. Nothing was reset.');
     }
   }
 
@@ -326,10 +342,11 @@ export function MappingStep({
     setPreferredExchanges(next);
     if (!accountId) return;
     try {
-      const current = await api.activities.getImportMapping(accountId, IMPORTER_ID);
-      await api.activities.saveImportMapping(withPreferredExchanges(current, next));
+      await mappingPersistence.current.update(accountId, (mapping) =>
+        withPreferredExchanges(mapping, next),
+      );
     } catch {
-      // Non-fatal: the preference applies to this session.
+      setPersistError('Wealthfolio could not save the preferred exchanges. They apply only here.');
     }
   }
 
@@ -373,6 +390,7 @@ export function MappingStep({
               onSave={handleSavePreferred}
               rememberedCount={rememberedCount}
               onForgetAll={handleForgetAll}
+              disabled={accepting}
             />
           )}
 
@@ -617,11 +635,13 @@ function MappingSettings({
   onSave,
   rememberedCount,
   onForgetAll,
+  disabled,
 }: {
   preferredExchanges: string[];
   onSave: (exchanges: string[]) => Promise<void>;
   rememberedCount: number;
   onForgetAll: () => Promise<void>;
+  disabled: boolean;
 }) {
   const [text, setText] = useState(preferredExchanges.join(', '));
   const [confirming, setConfirming] = useState(false);
@@ -650,7 +670,7 @@ function MappingSettings({
             className="h-8 flex-1 rounded-md border bg-background px-2 font-mono text-sm"
             data-testid="preferred-exchanges"
           />
-          <Button type="submit" variant="outline" size="sm" disabled={!dirty}>
+          <Button type="submit" variant="outline" size="sm" disabled={!dirty || disabled}>
             Save
           </Button>
         </div>
@@ -672,7 +692,7 @@ function MappingSettings({
             <Button
               variant="destructive"
               size="sm"
-              disabled={busy}
+              disabled={busy || disabled}
               onClick={() => {
                 setBusy(true);
                 onForgetAll()
@@ -696,7 +716,7 @@ function MappingSettings({
           <Button
             variant="outline"
             size="sm"
-            disabled={rememberedCount === 0}
+            disabled={rememberedCount === 0 || disabled}
             onClick={() => setConfirming(true)}
             data-testid="forget-all-mappings"
           >
